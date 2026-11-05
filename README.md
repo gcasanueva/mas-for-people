@@ -10,7 +10,7 @@ como servidor MCP local en Claude Desktop y una ventana de escritorio
 | Paso | Qué deja funcionando | Estado |
 |---|---|---|
 | 1 | Modelos de datos y catálogo: leer y validar `agente.md`, 3 agentes de ejemplo, pruebas | ✅ |
-| 2 | Servidor MCP mínimo (`listar_agentes`, `ver_agente`) en Claude Desktop | ⏳ |
+| 2 | Servidor MCP mínimo (`listar_agentes`, `ver_agente`) en Claude Desktop | ✅ |
 | 3 | Protocolo panel + SQLite + ciclo de turnos | ⏳ |
 | 4 | Visor mínimo (PySide6) | ⏳ |
 | 5 | Protocolo debate por rondas | ⏳ |
@@ -25,7 +25,27 @@ Requiere Python 3.11+ y [uv](https://docs.astral.sh/uv/).
 uv sync
 uv run pytest          # pruebas del núcleo
 uv run mas-validar     # muestra el catálogo y los errores de cada archivo
+uv run mas-config      # bloque para pegar en la configuración de Claude Desktop
 ```
+
+## Usarlo en Claude Desktop
+
+Guía paso a paso (Windows, sin experiencia previa con uv):
+[docs/claude-desktop.md](docs/claude-desktop.md).
+
+En corto: `uv sync`, luego `uv run mas-config`, pega el bloque que imprime
+en *Configuración → Desarrollador → Editar configuración* de Claude Desktop
+y reinícialo. El servidor expone dos herramientas de solo lectura:
+
+| Herramienta | Entrada | Salida |
+|---|---|---|
+| `listar_agentes` | `familia?`, `texto?` | `{agentes: [{id, nombre, familia, postura, descripcion}], total, familias, errores}` |
+| `ver_agente` | `id` | Ficha, formato de salida con secciones, límites, instrucciones, `agente_md` y skills que usa |
+
+El servidor no llama a ningún modelo: Claude razona y el servidor entrega
+datos. Relee los archivos en cada consulta, así que un `agente.md` editado a
+mano se ve sin reiniciar. Encuentra la carpeta del catálogo por la variable
+`MAS_CARPETA`, la carpeta actual o la del repositorio, en ese orden.
 
 ## Formato `agente.md`
 
@@ -70,6 +90,11 @@ src/mas/core/          # núcleo, sin MCP ni ventana
   catalogo.py          # carga, valida, lista y busca agentes y skills
   formatos.py          # formatos de salida (output_contract)
   textos.py            # todos los mensajes al usuario (para traducir)
+src/mas/servidor/      # capa MCP (no la importa el núcleo)
+  app.py               # servidor y herramientas; comando mas-servidor
+  config.py            # comando mas-config
+  raiz.py              # ubica la carpeta con agentes/ y skills/
+docs/claude-desktop.md # guía de conexión para Windows
 agentes/               # un agente.md por agente, agrupados por familia
 skills/                # una carpeta por skill con SKILL.md
 tests/
