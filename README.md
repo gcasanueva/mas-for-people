@@ -12,7 +12,7 @@ como servidor MCP local en Claude Desktop y una ventana de escritorio
 | 1 | Modelos de datos y catálogo: leer y validar `agente.md`, 3 agentes de ejemplo, pruebas | ✅ |
 | 2 | Servidor MCP mínimo (`listar_agentes`, `ver_agente`) en Claude Desktop | ✅ |
 | 3 | Protocolo panel + SQLite + ciclo de turnos (`abrir_sala`, `siguiente_turno`, `publicar_turno`, `veredicto`, `ver_sala`) | ✅ |
-| 4 | Visor mínimo (PySide6) | ⏳ |
+| 4 | Visor de escritorio (PySide6): catálogo, salas, mesa, hilos, veredicto; búsqueda, exportar y refresco automático | ✅ |
 | 5 | Protocolo debate por rondas | ⏳ |
 | 6 | `guardar_agente`, prompts MCP, catálogo completo | ⏳ |
 | 7 | Exportar a Claude Code y a Markdown, guía de instalación | ⏳ |
@@ -26,6 +26,7 @@ uv sync
 uv run pytest          # pruebas del núcleo
 uv run mas-validar     # muestra el catálogo y los errores de cada archivo
 uv run mas-config      # bloque para pegar en la configuración de Claude Desktop
+uv run mas-visor       # abre la ventana que muestra catálogo y salas
 ```
 
 ## Usarlo en Claude Desktop
@@ -68,6 +69,19 @@ El servidor no llama a ningún modelo: Claude razona y el servidor entrega
 datos. Relee los archivos en cada consulta, así que un `agente.md` editado a
 mano se ve sin reiniciar. Encuentra la carpeta del catálogo por la variable
 `MAS_CARPETA`, la carpeta actual o la del repositorio, en ese orden.
+
+## Ver las salas en la ventana
+
+```bash
+uv run mas-visor
+```
+
+Abre una ventana con dos pestañas: **Salas** (buscador, tabla y, al elegir
+una, sus pestañas Mesa, Hilos con una columna por agente y Veredicto; botón
+para exportarla a Markdown) y **Catálogo** (agentes por familia con su
+ficha). Solo lee: abre `datos/mas.db` en modo lectura y la relee cada 3
+segundos, así que una sala que Claude está llevando avanza sola en la
+ventana sin molestar al servidor. Guía para Windows: [docs/visor.md](docs/visor.md).
 
 ## Formato `agente.md`
 
@@ -114,14 +128,19 @@ src/mas/core/          # núcleo, sin MCP ni ventana
   salas.py             # gestor de salas: abrir, turnos, publicar, veredicto, ver
   protocolos/          # máquinas de estados (panel; debate en el paso 5)
   almacen.py           # guardado en SQLite (WAL); el único lugar con SQL
-  vistas.py            # salas en Markdown para ver_sala
+  vistas.py            # salas y fichas en Markdown (ver_sala y visor)
+  consulta.py          # lectura de salas para el visor (solo lectura)
+  raiz.py              # ubica la carpeta del proyecto y la base de datos
   sistema/             # agentes de sistema (verificador)
   textos.py            # todos los mensajes al usuario (para traducir)
 src/mas/servidor/      # capa MCP (no la importa el núcleo)
   app.py               # servidor y herramientas; comando mas-servidor
   config.py            # comando mas-config
-  raiz.py              # ubica la carpeta con agentes/ y skills/, y la base de datos
+src/mas/visor/         # ventana PySide6 de solo lectura; comando mas-visor
+  app.py               # ventana principal y refresco
+  vistas/              # catalogo.py, salas.py, sala_detalle.py
 docs/claude-desktop.md # guía de conexión para Windows
+docs/visor.md          # cómo abrir la ventana en Windows
 agentes/               # un agente.md por agente, agrupados por familia
 skills/                # una carpeta por skill con SKILL.md
 datos/                 # mas.db con las salas (se crea solo; no va a git)

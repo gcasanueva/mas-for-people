@@ -311,3 +311,42 @@ ARTEFACTO_CAMPOS: dict[str, str] = {
     "cambiaria_de_opinion_si": "Qué dato o hecho le haría cambiar de opinión.",
 }
 SALA_ABIERTA = "Sala abierta. Llama a siguiente_turno con este sala_id."
+
+# Visor de escritorio (paso 4, CU-07)
+VISOR_TITULO = "MAS for People"
+VISOR_PESTANA_CATALOGO = "Catálogo"
+VISOR_PESTANA_SALAS = "Salas"
+VISOR_PESTANA_MESA = "Mesa"
+VISOR_PESTANA_HILOS = "Hilos"
+VISOR_PESTANA_VEREDICTO = "Veredicto"
+VISOR_COL_AGENTE = "Agente"
+VISOR_COL_POSTURA = "Postura"
+VISOR_COLUMNAS_SALAS = ("Fecha", "Objetivo", "Protocolo", "Estado", "Turnos")
+VISOR_ELIGE_AGENTE = "Elige un agente de la lista para ver su ficha."
+VISOR_SIN_SKILLS = "_Este agente no usa skills._"
+VISOR_ERRORES_CATALOGO = "Archivos con errores ({n})"
+VISOR_ERRORES_TITULO = "# Archivos con errores\n\nEstos archivos no se cargaron. Corrígelos y pulsa Recargar."
+VISOR_RECARGAR = "Recargar"
+VISOR_BUSCAR = "Buscar en el objetivo…"
+VISOR_EXPORTAR = "Exportar a Markdown…"
+VISOR_EXPORTAR_TITULO = "Exportar sala"
+VISOR_EXPORTADA = "Sala exportada a {ruta}"
+VISOR_EXPORTAR_ERROR = "No se pudo guardar el archivo: {detalle}"
+VISOR_SIN_SALAS = (
+    "Todavía no hay salas guardadas.\n\n"
+    "Abre una desde Claude Desktop (por ejemplo: «abre una sala en panel con el ingeniero "
+    "industrial y el economista ortodoxo para…») y aparecerá aquí sola."
+)
+VISOR_SIN_RESULTADOS = "Ninguna sala tiene «{texto}» en el objetivo."
+VISOR_ELIGE_SALA = "Elige una sala de la lista para ver su mesa, sus hilos y su veredicto."
+VISOR_SALA_DESAPARECIDA = "La sala ya no está en la base de datos."
+VISOR_EN_CURSO = "En curso: se actualiza sola cada {segundos} s · {pendientes} turno(s) en preparación"
+VISOR_CERRADA = "Sala cerrada"
+VISOR_ESTADO_BD = "Base de datos: {ruta}"
+VISOR_ESTADO_SIN_BD = "Aún no existe {ruta}: se creará al abrir la primera sala en Claude Desktop."
+VISOR_ACTUALIZADO = "Actualizado {hora}"
+VISOR_SIN_RAIZ = "No se encontró la carpeta del proyecto"
+VISOR_SIN_PYSIDE = (
+    "Falta la biblioteca de la ventana (Qt para Python). En la carpeta del proyecto ejecuta "
+    "«uv sync» y vuelve a intentarlo."
+)
