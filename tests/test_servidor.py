@@ -13,7 +13,7 @@ from mcp.client.stdio import StdioServerParameters
 from conftest import RAIZ_PROYECTO, crear_agente, crear_skill, escribir
 from mas.servidor.app import crear_servidor
 from mas.servidor.config import archivo_config_claude, bloque_config
-from mas.servidor.raiz import ubicar_raiz
+from mas.servidor.raiz import ubicar_bd, ubicar_raiz
 
 pytestmark = pytest.mark.anyio
 
@@ -34,12 +34,15 @@ async def _llamar(raiz: Path, herramienta: str, argumentos: dict) -> tuple[bool,
 # --- Herramientas ------------------------------------------------------------
 
 
-async def test_expone_las_dos_herramientas_de_solo_lectura():
+async def test_expone_las_herramientas_del_catalogo_y_de_salas():
     async with Client(crear_servidor(RAIZ_PROYECTO)) as cliente:
-        herramientas = (await cliente.list_tools()).tools
-    assert sorted(h.name for h in herramientas) == ["listar_agentes", "ver_agente"]
-    for h in herramientas:
-        assert h.annotations.read_only_hint is True
+        herramientas = {h.name: h for h in (await cliente.list_tools()).tools}
+    assert sorted(herramientas) == [
+        "abrir_sala", "listar_agentes", "publicar_turno", "siguiente_turno", "ver_agente", "ver_sala", "veredicto",
+    ]
+    for nombre in ("listar_agentes", "ver_agente", "ver_sala"):
+        assert herramientas[nombre].annotations.read_only_hint is True
+    for h in herramientas.values():
         assert h.description  # en español, para que Claude sepa cuándo usarla
 
 
@@ -97,6 +100,61 @@ async def test_informa_archivos_con_errores(raiz_vacia: Path):
     assert any("agentes/pruebas/malo/agente.md · stance" in e for e in datos["errores"])
 
 
+# --- Salas por MCP -----------------------------------------------------------
+
+
+def _texto(turno: dict) -> str:
+    return "\n\n".join(f"## {s}\nTexto." for s in turno["formato_salida"]["secciones"])
+
+
+async def test_sala_panel_completa_por_mcp(tmp_path: Path):
+    async with Client(crear_servidor(RAIZ_PROYECTO, tmp_path / "mas.db")) as c:
+        r = await c.call_tool("abrir_sala", {"objetivo": "Bajar costos", "agentes": ["periodista", "ingeniero-industrial"]})
+        sala_id = r.structured_content["sala_id"]
+        while True:
+            t = (await c.call_tool("siguiente_turno", {"sala_id": sala_id})).structured_content
+            if t.get("estado") == "listo_para_veredicto":
+                break
+            art = {"postura": "propuesta", "resumen": "Idea", "confianza": 0.5}
+            r = await c.call_tool("publicar_turno", {"sala_id": sala_id, "turno_id": t["turno_id"],
+                                                      "contenido": "sin formato", "artefacto": art})
+            assert r.structured_content["ok"] is False and r.structured_content["errores"]
+            r = await c.call_tool("publicar_turno", {"sala_id": sala_id, "turno_id": t["turno_id"],
+                                                      "contenido": _texto(t), "artefacto": art})
+            assert r.structured_content["ok"] is True
+        v = (await c.call_tool("veredicto", {"sala_id": sala_id})).structured_content
+        assert v["agente"]["id"] == "verificador" and len(v["mesa"]) == 2
+        r = await c.call_tool("veredicto", {"sala_id": sala_id, "contenido": _texto(v), "confianza": 0.8,
+                                             "acuerdos": ["A"], "plan": ["Paso 1"]})
+        assert r.structured_content["estado"] == "cerrada"
+        r = await c.call_tool("ver_sala", {"sala_id": sala_id, "vista": "veredicto"})
+        assert "**Confianza:** 0.80" in r.content[0].text
+        r = await c.call_tool("ver_sala", {})
+        assert sala_id in r.content[0].text
+
+
+async def test_errores_de_sala_llegan_como_error_de_herramienta(tmp_path: Path):
+    async with Client(crear_servidor(RAIZ_PROYECTO, tmp_path / "mas.db")) as c:
+        r = await c.call_tool("siguiente_turno", {"sala_id": "nada"})
+        assert r.is_error and "No existe una sala con el id 'nada'" in r.content[0].text
+        r = await c.call_tool("abrir_sala", {"objetivo": "x", "agentes": ["periodista", "periodista"]})
+        assert r.is_error and "dos veces" in r.content[0].text
+
+
+async def test_esquema_de_publicar_turno_describe_el_artefacto():
+    async with Client(crear_servidor(RAIZ_PROYECTO)) as c:
+        h = next(h for h in (await c.list_tools()).tools if h.name == "publicar_turno")
+    art = h.input_schema["properties"]["artefacto"]
+    assert art["required"] == ["postura", "resumen", "confianza"]
+    assert art["properties"]["postura"]["enum"] == ["propuesta", "apoyo", "objecion", "correccion"]
+    assert "$ref" not in str(art)
+
+
+def test_bd_por_defecto_y_variable(tmp_path: Path):
+    assert ubicar_bd(tmp_path, {}) == (tmp_path / "datos" / "mas.db").resolve()
+    assert ubicar_bd(tmp_path, {"MAS_BD": str(tmp_path / "x.db")}) == (tmp_path / "x.db").resolve()
+
+
 # --- Prueba de punta a punta por stdio (como lo usa Claude Desktop) ---------
 
 
@@ -105,12 +163,15 @@ async def test_servidor_real_por_stdio(tmp_path: Path):
         command=sys.executable,
         args=["-m", "mas.servidor.app"],
         cwd=str(tmp_path),  # Claude Desktop puede arrancarlo en cualquier carpeta
-        env={"MAS_CARPETA": str(RAIZ_PROYECTO)},
+        env={"MAS_CARPETA": str(RAIZ_PROYECTO), "MAS_BD": str(tmp_path / "mas.db")},
     )
     async with Client(parametros) as cliente:
         r = await cliente.call_tool("listar_agentes", {"familia": "economia"})
+        sala = await cliente.call_tool("abrir_sala", {"objetivo": "x", "agentes": ["periodista", "economista-ortodoxo"]})
     assert not r.is_error
     assert [a["id"] for a in r.structured_content["agentes"]] == ["economista-ortodoxo"]
+    assert not sala.is_error
+    assert (tmp_path / "mas.db").exists()  # la base va donde dice MAS_BD
 
 
 # --- Ubicar la carpeta y mas-config ---------------------------------------

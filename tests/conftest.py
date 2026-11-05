@@ -26,6 +26,14 @@ Eres un agente de prueba.
 """
 
 
+@pytest.fixture(autouse=True)
+def bd_temporal(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Ninguna prueba escribe en datos/ del repositorio: cada una usa su propia base."""
+    ruta = tmp_path_factory.mktemp("bd") / "mas.db"
+    monkeypatch.setenv("MAS_BD", str(ruta))
+    return ruta
+
+
 @pytest.fixture
 def raiz_vacia(tmp_path: Path) -> Path:
     (tmp_path / "agentes").mkdir()

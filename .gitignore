@@ -7,3 +7,6 @@ dist/
 build/
 *.sqlite3
 *.db
+
+# Salas guardadas (SQLite)
+datos/

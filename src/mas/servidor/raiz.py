@@ -33,3 +33,15 @@ def ubicar_raiz(cwd: Path | None = None, entorno: dict[str, str] | None = None) 
         if _es_raiz(carpeta):
             return carpeta.resolve()
     raise FileNotFoundError(textos.RAIZ_NO_ENCONTRADA)
+
+
+VARIABLE_BD = "MAS_BD"
+BD_POR_DEFECTO = Path("datos") / "mas.db"
+
+
+def ubicar_bd(raiz: Path, entorno: dict[str, str] | None = None) -> Path:
+    """Archivo SQLite de las salas: ``MAS_BD`` o ``<raiz>/datos/mas.db`` (RNF-03)."""
+    entorno = os.environ if entorno is None else entorno
+    if entorno.get(VARIABLE_BD):
+        return Path(entorno[VARIABLE_BD]).expanduser().resolve()
+    return (raiz / BD_POR_DEFECTO).resolve()
