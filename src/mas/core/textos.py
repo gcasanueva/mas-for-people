@@ -112,7 +112,8 @@ SERVIDOR_INSTRUCCIONES = (
     "turnos sobre un objetivo. El servidor no razona: entrega a cada agente sus "
     "instrucciones y contexto, y tú (Claude) haces de cada uno. Usa "
     "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo.\n\n"
-    "Para una sala: abrir_sala, luego repite siguiente_turno -> escribe la "
+    "Para una sala: abrir_sala (protocolo 'debate' por rondas o 'panel' de una "
+    "ronda), luego repite siguiente_turno -> escribe la "
     "intervención de ese agente -> publicar_turno, hasta que siguiente_turno "
     "diga 'listo_para_veredicto'; entonces llama a veredicto (recibes el turno "
     "del verificador), escribe el veredicto y llama a veredicto otra vez con él. "
@@ -242,6 +243,7 @@ VEREDICTO_YA_GUARDADO = "La sala ya estaba cerrada; este es el veredicto guardad
 VISTA_DESCONOCIDA = "Vista desconocida: '{vista}'. Usa 'mesa', 'hilo' o 'veredicto'."
 VISTA_SIN_SALAS = "Todavía no hay salas guardadas."
 VISTA_TITULO_SALAS = "# Salas guardadas"
+VISTA_RONDA = "### Ronda {ronda}"
 VISTA_MESA_VACIA = "_La mesa está vacía: nadie ha publicado todavía._"
 VISTA_HILO_VACIO = "_{nombre} no ha publicado turnos en esta sala._"
 VISTA_SIN_VEREDICTO = "_La sala todavía no tiene veredicto (estado: {estado})._"
@@ -250,9 +252,12 @@ VISTA_AGENTE_FUERA = "El agente '{id}' no participa en esta sala. Participan: {a
 # Descripciones de las herramientas de sala (las lee Claude).
 HERRAMIENTA_ABRIR_SALA = (
     "Abre una sala con un objetivo y de 2 a 6 agentes del catálogo (sus ids). "
-    "Protocolo 'panel': cada agente propone una vez sin ver a los demás y luego un "
-    "verificador revisa todo. Devuelve sala_id y el orden de turnos previsto. "
-    "Después llama a siguiente_turno."
+    "Protocolo 'debate' (por defecto): en la ronda 1 cada agente propone sin ver a "
+    "los demás; en las rondas siguientes lee el resumen de la mesa y apoya, objeta "
+    "o corrige. Termina por consenso (una ronda sin objeciones ni correcciones) o al "
+    "llegar a max_rondas. Protocolo 'panel': una sola ronda, nadie ve a los demás. "
+    "En ambos, al final un verificador revisa todo. Devuelve sala_id y el orden de "
+    "turnos previsto (en debate, el máximo). Después llama a siguiente_turno."
 )
 HERRAMIENTA_SIGUIENTE_TURNO = (
     "Devuelve el turno que toca en la sala: qué agente habla, sus instrucciones, "
@@ -280,8 +285,8 @@ HERRAMIENTA_VER_SALA = (
 )
 PARAM_OBJETIVO = "Qué debe resolver la sala, en palabras del usuario."
 PARAM_AGENTES = "Ids de 2 a 6 agentes, en el orden en que hablarán."
-PARAM_PROTOCOLO = "Protocolo de la sala. Por ahora solo 'panel'."
-PARAM_MAX_RONDAS = "Rondas de discusión (1 a 4). El panel siempre usa 1."
+PARAM_PROTOCOLO = "'debate' (rondas con crítica, por defecto) o 'panel' (una ronda en paralelo)."
+PARAM_MAX_RONDAS = "Rondas máximas del debate (1 a 4; por defecto 2). El panel siempre usa 1."
 PARAM_MAX_PALABRAS = "Palabras máximas por intervención (50 a 2000)."
 PARAM_POSTURAS = (
     "Opcional: postura distinta a la habitual para algún agente, por ejemplo "
@@ -302,15 +307,35 @@ PARAM_PLAN = "Segunda llamada: pasos del plan de acción, en orden."
 PARAM_VISTA = "Qué mostrar: 'mesa', 'hilo' o 'veredicto'."
 PARAM_AGENTE_HILO = "Solo para vista='hilo': id del agente cuyo hilo mostrar."
 ARTEFACTO_CAMPOS: dict[str, str] = {
-    "postura": "propuesta, apoyo, objecion o correccion (en panel siempre 'propuesta').",
+    "postura": (
+        "Ronda 1 (y panel): 'propuesta'. Rondas de crítica del debate: 'apoyo', "
+        "'objecion' o 'correccion' (estas dos exigen responde_a)."
+    ),
     "resumen": "La idea central en 1 a 3 frases (máximo 600 caracteres).",
-    "supuestos": "Supuestos de los que depende la propuesta.",
-    "riesgos": "Riesgos principales.",
-    "responde_a": "Ids de turnos de otros agentes a los que responde (vacío en panel).",
+    "supuestos": "Hasta 5 supuestos de los que depende la propuesta (frases cortas).",
+    "riesgos": "Hasta 5 riesgos principales (frases cortas).",
+    "responde_a": "Ids de turnos (los turno_id del resumen de la mesa) a los que responde; vacío en la ronda 1 y en panel.",
     "confianza": "Confianza del agente en su propuesta, de 0 a 1.",
     "cambiaria_de_opinion_si": "Qué dato o hecho le haría cambiar de opinión.",
 }
 SALA_ABIERTA = "Sala abierta. Llama a siguiente_turno con este sala_id."
+SALA_ABIERTA_DEBATE = (
+    "Sala abierta. Llama a siguiente_turno con este sala_id y sigue sin pausas hasta "
+    "'listo_para_veredicto'; el debate puede terminar antes de lo previsto si hay consenso."
+)
+TURNO_INDICACION_CRITICA = (
+    " Es una ronda de crítica: revisa las intervenciones de la mesa desde tu postura y elige "
+    "'apoyo' si las sostienes, 'objecion' si ves un problema o 'correccion' si propones un "
+    "cambio concreto; en esos dos casos pon en responde_a los turno_id a los que respondes. "
+    "No repitas tu propuesta: avanza la discusión."
+)
+DEBATE_FALTA_RESPONDE_A = (
+    "Una '{postura}' debe indicar a qué responde: pon en artefacto.responde_a el turno_id de "
+    "la intervención que objetas o corriges (están en resumen_mesa)."
+)
+MODERADOR_SIGUE = "Moderador: ronda {ronda} cerrada ({resumen}). Hay objeciones o correcciones: sigue la ronda {siguiente}."
+MODERADOR_CONSENSO = "Moderador: ronda {ronda} cerrada ({resumen}). Hay consenso: el debate termina y toca el veredicto."
+MODERADOR_LIMITE = "Moderador: ronda {ronda} cerrada ({resumen}). Se llegó al máximo de rondas: toca el veredicto."
 
 # Visor de escritorio (paso 4, CU-07)
 VISOR_TITULO = "MAS for People"
@@ -334,7 +359,7 @@ VISOR_EXPORTADA = "Sala exportada a {ruta}"
 VISOR_EXPORTAR_ERROR = "No se pudo guardar el archivo: {detalle}"
 VISOR_SIN_SALAS = (
     "Todavía no hay salas guardadas.\n\n"
-    "Abre una desde Claude Desktop (por ejemplo: «abre una sala en panel con el ingeniero "
+    "Abre una desde Claude Desktop (por ejemplo: «abre un debate con el ingeniero "
     "industrial y el economista ortodoxo para…») y aparecerá aquí sola."
 )
 VISOR_SIN_RESULTADOS = "Ninguna sala tiene «{texto}» en el objetivo."

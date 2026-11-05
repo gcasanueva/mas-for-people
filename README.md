@@ -13,7 +13,7 @@ como servidor MCP local en Claude Desktop y una ventana de escritorio
 | 2 | Servidor MCP mínimo (`listar_agentes`, `ver_agente`) en Claude Desktop | ✅ |
 | 3 | Protocolo panel + SQLite + ciclo de turnos (`abrir_sala`, `siguiente_turno`, `publicar_turno`, `veredicto`, `ver_sala`) | ✅ |
 | 4 | Visor de escritorio (PySide6): catálogo, salas, mesa, hilos, veredicto; búsqueda, exportar y refresco automático | ✅ |
-| 5 | Protocolo debate por rondas | ⏳ |
+| 5 | Protocolo debate por rondas: crítica con resumen de mesa, cierre por consenso o por límite, avisos del moderador | ✅ |
 | 6 | `guardar_agente`, prompts MCP, catálogo completo | ⏳ |
 | 7 | Exportar a Claude Code y a Markdown, guía de instalación | ⏳ |
 
@@ -42,9 +42,9 @@ y reinícialo. El servidor expone estas herramientas:
 |---|---|---|
 | `listar_agentes` | `familia?`, `texto?` | `{agentes: [{id, nombre, familia, postura, descripcion}], total, familias, errores}` |
 | `ver_agente` | `id` | Ficha, formato de salida con secciones, límites, instrucciones, `agente_md` y skills que usa |
-| `abrir_sala` | `objetivo`, `agentes[]` (2–6), `protocolo` (`panel`), `max_palabras`, `posturas?` | `{sala_id, plan}`: orden de turnos previsto |
-| `siguiente_turno` | `sala_id` | `{turno_id, agente, objetivo, instrucciones, skills, hilo, resumen_mesa, formato_salida, max_palabras}` o `{estado: "listo_para_veredicto"}` |
-| `publicar_turno` | `sala_id`, `turno_id`, `contenido`, `artefacto` | `{ok: true}` o `{ok: false, errores}` para corregir ese turno |
+| `abrir_sala` | `objetivo`, `agentes[]` (2–6), `protocolo` (`debate`/`panel`), `max_rondas` (1–4), `max_palabras`, `posturas?` | `{sala_id, plan}`: orden de turnos previsto (en debate, el máximo) |
+| `siguiente_turno` | `sala_id` | `{turno_id, agente, ronda, objetivo, instrucciones, skills, hilo, resumen_mesa, formato_salida, max_palabras}` o `{estado: "listo_para_veredicto", motivo_cierre}` |
+| `publicar_turno` | `sala_id`, `turno_id`, `contenido`, `artefacto` | `{ok: true, moderador?}` o `{ok: false, errores}` para corregir ese turno |
 | `veredicto` | `sala_id`; en la 2.ª llamada `contenido`, `acuerdos`, `desacuerdos`, `confianza`, `plan` | 1.ª: turno del verificador (objetivo + mesa). 2.ª: veredicto guardado y sala cerrada |
 | `ver_sala` | `sala_id?`, `vista` (`mesa`/`hilo`/`veredicto`), `agente?` | Markdown; sin `sala_id` lista las salas |
 
@@ -57,10 +57,24 @@ abrir_sala → (siguiente_turno → Claude responde como ese agente → publicar
 Claude hace de cada agente por turnos; el servidor hace de moderador: decide
 quién habla, entrega a cada uno solo su contexto, rechaza respuestas sin las
 secciones del formato o demasiado largas (con un 10 % de margen) y no deja
-saltar estados (`abierta → propuestas → verificacion → cerrada`). Por ahora
-el único protocolo es **panel**: una ronda, nadie ve a los demás, y al final
-un verificador que no participó revisa la mesa contra el objetivo. El debate
-por rondas llega en el paso 5.
+saltar estados. Hay dos protocolos:
+
+- **debate** (por defecto, CU-03): en la ronda 1 cada agente propone sin ver
+  a los demás. En las rondas siguientes cada uno recibe el resumen de la mesa
+  (la última intervención de cada compañero: postura, resumen y confianza) y
+  responde con `apoyo`, `objecion` o `correccion`; las dos últimas deben decir
+  a qué turno responden (`responde_a`). El moderador cierra por **consenso**
+  (una ronda de crítica sin objeciones ni correcciones) o al llegar a
+  `max_rondas` (1 a 4, por defecto 2), y avisa al cerrar cada ronda.
+  `abierta → propuestas → critica → verificacion → cerrada`.
+- **panel** (CU-04): una sola ronda en paralelo, nadie ve a los demás.
+  `abierta → propuestas → verificacion → cerrada`.
+
+En ambos, al final un verificador que no participó revisa la mesa contra el
+objetivo. Para que cada turno quepa en ~3.000 palabras (RNF-02), el hilo de
+un agente trae completa solo su última intervención (las anteriores,
+resumidas) y el verificador recibe completo el último artefacto de cada
+agente y, de los anteriores, postura y resumen.
 
 Todo se guarda en `datos/mas.db` (SQLite en modo WAL) dentro de la carpeta
 del proyecto, o donde diga la variable `MAS_BD`. No sale nada a internet.
@@ -126,7 +140,7 @@ src/mas/core/          # núcleo, sin MCP ni ventana
   catalogo.py          # carga, valida, lista y busca agentes y skills
   formatos.py          # formatos de salida (output_contract) y revisión de secciones
   salas.py             # gestor de salas: abrir, turnos, publicar, veredicto, ver
-  protocolos/          # máquinas de estados (panel; debate en el paso 5)
+  protocolos/          # máquinas de estados: debate.py y panel.py
   almacen.py           # guardado en SQLite (WAL); el único lugar con SQL
   vistas.py            # salas y fichas en Markdown (ver_sala y visor)
   consulta.py          # lectura de salas para el visor (solo lectura)

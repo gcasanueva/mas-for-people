@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from ..modelos import Protocolo
 from .base import PasoPlan, ProtocoloSala, TransicionInvalida
+from .debate import Debate
 from .panel import Panel
 
-_PROTOCOLOS: dict[Protocolo, ProtocoloSala] = {Protocolo.PANEL: Panel()}
+_PROTOCOLOS: dict[Protocolo, ProtocoloSala] = {Protocolo.DEBATE: Debate(), Protocolo.PANEL: Panel()}
 
 
 def disponibles() -> list[Protocolo]:
@@ -23,4 +24,4 @@ def obtener(protocolo: Protocolo) -> ProtocoloSala | None:
     return _PROTOCOLOS.get(protocolo)
 
 
-__all__ = ["PasoPlan", "ProtocoloSala", "TransicionInvalida", "Panel", "disponibles", "obtener"]
+__all__ = ["PasoPlan", "ProtocoloSala", "TransicionInvalida", "Debate", "Panel", "disponibles", "obtener"]
