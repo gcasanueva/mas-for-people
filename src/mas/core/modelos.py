@@ -3,8 +3,8 @@
 Ocho entidades (ver la ERS, "Modelo de dominio"):
 
 - ``Skill`` y ``Agente`` viven como archivos (``SKILL.md`` y ``agente.md``).
-- ``Sala``, ``Hilo``, ``Turno``, ``Artefacto`` y ``Veredicto`` se guardarán en
-  SQLite (paso 3).
+- ``Sala``, ``Turno`` (con su ``Artefacto``) y ``Veredicto`` se guardan en
+  SQLite (``almacen.py``); ``Hilo`` es la vista de los turnos de un agente.
 - ``Mesa`` no es una tabla: es la vista de todos los artefactos de una sala.
 
 Los atributos de Python están en español. En ``agente.md`` los campos van

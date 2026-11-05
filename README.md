@@ -11,7 +11,7 @@ como servidor MCP local en Claude Desktop y una ventana de escritorio
 |---|---|---|
 | 1 | Modelos de datos y catálogo: leer y validar `agente.md`, 3 agentes de ejemplo, pruebas | ✅ |
 | 2 | Servidor MCP mínimo (`listar_agentes`, `ver_agente`) en Claude Desktop | ✅ |
-| 3 | Protocolo panel + SQLite + ciclo de turnos | ⏳ |
+| 3 | Protocolo panel + SQLite + ciclo de turnos (`abrir_sala`, `siguiente_turno`, `publicar_turno`, `veredicto`, `ver_sala`) | ✅ |
 | 4 | Visor mínimo (PySide6) | ⏳ |
 | 5 | Protocolo debate por rondas | ⏳ |
 | 6 | `guardar_agente`, prompts MCP, catálogo completo | ⏳ |
@@ -35,12 +35,34 @@ Guía paso a paso (Windows, sin experiencia previa con uv):
 
 En corto: `uv sync`, luego `uv run mas-config`, pega el bloque que imprime
 en *Configuración → Desarrollador → Editar configuración* de Claude Desktop
-y reinícialo. El servidor expone dos herramientas de solo lectura:
+y reinícialo. El servidor expone estas herramientas:
 
 | Herramienta | Entrada | Salida |
 |---|---|---|
 | `listar_agentes` | `familia?`, `texto?` | `{agentes: [{id, nombre, familia, postura, descripcion}], total, familias, errores}` |
 | `ver_agente` | `id` | Ficha, formato de salida con secciones, límites, instrucciones, `agente_md` y skills que usa |
+| `abrir_sala` | `objetivo`, `agentes[]` (2–6), `protocolo` (`panel`), `max_palabras`, `posturas?` | `{sala_id, plan}`: orden de turnos previsto |
+| `siguiente_turno` | `sala_id` | `{turno_id, agente, objetivo, instrucciones, skills, hilo, resumen_mesa, formato_salida, max_palabras}` o `{estado: "listo_para_veredicto"}` |
+| `publicar_turno` | `sala_id`, `turno_id`, `contenido`, `artefacto` | `{ok: true}` o `{ok: false, errores}` para corregir ese turno |
+| `veredicto` | `sala_id`; en la 2.ª llamada `contenido`, `acuerdos`, `desacuerdos`, `confianza`, `plan` | 1.ª: turno del verificador (objetivo + mesa). 2.ª: veredicto guardado y sala cerrada |
+| `ver_sala` | `sala_id?`, `vista` (`mesa`/`hilo`/`veredicto`), `agente?` | Markdown; sin `sala_id` lista las salas |
+
+### Cómo funciona una sala
+
+```
+abrir_sala → (siguiente_turno → Claude responde como ese agente → publicar_turno)… → veredicto ×2
+```
+
+Claude hace de cada agente por turnos; el servidor hace de moderador: decide
+quién habla, entrega a cada uno solo su contexto, rechaza respuestas sin las
+secciones del formato o demasiado largas (con un 10 % de margen) y no deja
+saltar estados (`abierta → propuestas → verificacion → cerrada`). Por ahora
+el único protocolo es **panel**: una ronda, nadie ve a los demás, y al final
+un verificador que no participó revisa la mesa contra el objetivo. El debate
+por rondas llega en el paso 5.
+
+Todo se guarda en `datos/mas.db` (SQLite en modo WAL) dentro de la carpeta
+del proyecto, o donde diga la variable `MAS_BD`. No sale nada a internet.
 
 El servidor no llama a ningún modelo: Claude razona y el servidor entrega
 datos. Relee los archivos en cada consulta, así que un `agente.md` editado a
@@ -88,14 +110,20 @@ agentes/ingenieria/malo/agente.md · stance: Falta el campo obligatorio.
 src/mas/core/          # núcleo, sin MCP ni ventana
   modelos.py           # Agente, Skill, Sala, Hilo, Turno, Artefacto, Mesa, Veredicto
   catalogo.py          # carga, valida, lista y busca agentes y skills
-  formatos.py          # formatos de salida (output_contract)
+  formatos.py          # formatos de salida (output_contract) y revisión de secciones
+  salas.py             # gestor de salas: abrir, turnos, publicar, veredicto, ver
+  protocolos/          # máquinas de estados (panel; debate en el paso 5)
+  almacen.py           # guardado en SQLite (WAL); el único lugar con SQL
+  vistas.py            # salas en Markdown para ver_sala
+  sistema/             # agentes de sistema (verificador)
   textos.py            # todos los mensajes al usuario (para traducir)
 src/mas/servidor/      # capa MCP (no la importa el núcleo)
   app.py               # servidor y herramientas; comando mas-servidor
   config.py            # comando mas-config
-  raiz.py              # ubica la carpeta con agentes/ y skills/
+  raiz.py              # ubica la carpeta con agentes/ y skills/, y la base de datos
 docs/claude-desktop.md # guía de conexión para Windows
 agentes/               # un agente.md por agente, agrupados por familia
 skills/                # una carpeta por skill con SKILL.md
+datos/                 # mas.db con las salas (se crea solo; no va a git)
 tests/
 ```

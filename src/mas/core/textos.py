@@ -108,10 +108,20 @@ ERROR_GENERICO = "Valor no válido."
 
 SERVIDOR_INSTRUCCIONES = (
     "MAS for People guarda un catálogo de agentes especializados (ingenieros, "
-    "economistas, periodistas...). El servidor no razona: entrega las fichas e "
-    "instrucciones de cada agente y tú (Claude) haces el trabajo. Usa "
-    "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo. "
-    "Responde al usuario en español."
+    "economistas, periodistas...) y lleva salas donde esos agentes trabajan por "
+    "turnos sobre un objetivo. El servidor no razona: entrega a cada agente sus "
+    "instrucciones y contexto, y tú (Claude) haces de cada uno. Usa "
+    "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo.\n\n"
+    "Para una sala: abrir_sala, luego repite siguiente_turno -> escribe la "
+    "intervención de ese agente -> publicar_turno, hasta que siguiente_turno "
+    "diga 'listo_para_veredicto'; entonces llama a veredicto (recibes el turno "
+    "del verificador), escribe el veredicto y llama a veredicto otra vez con él. "
+    "Hazlo todo seguido, sin pedir confirmación al usuario entre turnos; muestra "
+    "solo una línea de avance por turno y, al final, el veredicto completo. En "
+    "cada turno usa solo lo que entrega siguiente_turno (no lo que escribiste "
+    "como otros agentes): así cada agente conserva su propio punto de vista. Si "
+    "publicar_turno devuelve errores, corrige ese mismo turno y vuelve a "
+    "publicarlo. ver_sala muestra salas anteriores. Responde al usuario en español."
 )
 HERRAMIENTA_LISTAR = (
     "Lista los agentes del catálogo con su id, nombre, familia, postura y "
@@ -130,7 +140,10 @@ HERRAMIENTA_VER = (
 PARAM_FAMILIA = "Familia a mostrar, por ejemplo 'ingenieria'. Vacío para todas."
 PARAM_TEXTO = "Palabras a buscar, por ejemplo 'escéptico' o 'costos'. Vacío para no filtrar."
 PARAM_ID = "Id del agente, por ejemplo 'ingeniero-industrial'."
-SERVIDOR_INICIADO = "MAS for People: servidor MCP listo. Catálogo en {raiz} ({agentes} agentes, {skills} skills)."
+SERVIDOR_INICIADO = (
+    "MAS for People: servidor MCP listo. Catálogo en {raiz} ({agentes} agentes, "
+    "{skills} skills). Salas en {bd}."
+)
 SERVIDOR_ERRORES_CATALOGO = "MAS for People: {n} archivo(s) con errores en el catálogo:"
 RAIZ_NO_ENCONTRADA = (
     "No se encontró la carpeta del proyecto (la que tiene agentes/ y skills/). "
@@ -152,3 +165,149 @@ CONFIG_SIN_UV = (
     "Aviso: no encontré el programa 'uv' en esta terminal. Instálalo primero "
     "(ver docs/claude-desktop.md) y vuelve a ejecutar este comando."
 )
+
+# --- Salas (paso 3) ----------------------------------------------------------
+
+SALA_NO_ENCONTRADA = "No existe una sala con el id '{id}'. Usa ver_sala sin sala_id para ver las salas guardadas."
+SALA_CERRADA = "La sala '{id}' ya está cerrada; su veredicto se puede leer con ver_sala."
+SALA_AGENTE_INEXISTENTE = "El agente '{id}' no está en el catálogo. Usa listar_agentes para ver los ids disponibles."
+SALA_POSTURA_FUERA = "Se indicó una postura para '{id}', pero ese agente no está en la sala."
+PROTOCOLO_NO_DISPONIBLE = (
+    "El protocolo '{protocolo}' todavía no está disponible en esta versión. "
+    "Protocolos disponibles: {disponibles}."
+)
+PROTOCOLO_DESCONOCIDO = "Protocolo desconocido: '{protocolo}'. Usa uno de estos: {disponibles}."
+TRANSICION_INVALIDA = "La sala no puede pasar del estado '{desde}' a '{hasta}'."
+
+TURNO_NO_ENCONTRADO = (
+    "El turno '{turno_id}' no pertenece a la sala '{sala_id}'. Llama a siguiente_turno para "
+    "saber qué turno toca."
+)
+TURNO_YA_PUBLICADO = "El turno '{turno_id}' ya se publicó. Llama a siguiente_turno para seguir."
+TURNO_FALTAN_SECCIONES = (
+    "Al texto le faltan secciones del formato '{formato}': {faltan}. Cada sección debe empezar "
+    "una línea con su nombre, por ejemplo '## {ejemplo}'."
+)
+TURNO_DEMASIADO_LARGO = (
+    "El texto tiene {palabras} palabras y el límite de la sala es {limite}. Acórtalo y vuelve a publicar."
+)
+TURNO_POSTURA_NO_PERMITIDA = (
+    "En esta ronda el artefacto solo puede tener postura {permitidas}; llegó '{postura}'."
+)
+TURNO_RESPONDE_A_INEXISTENTE = "artefacto.responde_a menciona el turno '{id}', que no es de esta sala."
+TURNO_CORREGIR = (
+    "No se guardó nada. Corrige lo indicado, sin cambiar de agente, y vuelve a llamar a "
+    "publicar_turno con el mismo turno_id."
+)
+CONTENIDO_VACIO = "El contenido está vacío: escribe el texto de la intervención."
+VEREDICTO_CORREGIR = (
+    "No se guardó nada. Corrige lo indicado y vuelve a llamar a veredicto con el sala_id y la "
+    "respuesta del verificador."
+)
+TURNO_INDICACION = (
+    "Escribe la intervención de {nombre} (postura: {postura}) siguiendo sus instrucciones y sus "
+    "skills, con las secciones del formato como encabezados ({secciones}) y en {max_palabras} "
+    "palabras como máximo. Responde al objetivo de la sala{mesa}. Luego llama a publicar_turno "
+    "con el contenido y el artefacto. No muestres la intervención completa al usuario: basta "
+    "una línea de avance."
+)
+TURNO_INDICACION_MESA = " y ten en cuenta el resumen de la mesa"
+TURNO_INDICACION_SIN_MESA = "; en este protocolo no ves lo que dijeron los demás"
+TURNO_PUBLICADO_SIGUE = "Turno guardado. Llama a siguiente_turno para el próximo agente."
+TURNO_PUBLICADO_VEREDICTO = "Turno guardado. Ya hablaron todos: llama a veredicto con el sala_id."
+LISTO_PARA_VEREDICTO = "Ya no quedan turnos. Llama a veredicto con el sala_id para el cierre."
+
+VEREDICTO_FALTAN_TURNOS = (
+    "Aún quedan turnos sin publicar en la sala '{id}'. Llama a siguiente_turno hasta que diga "
+    "'listo_para_veredicto'."
+)
+VEREDICTO_PRIMERO_SIN_CONTENIDO = (
+    "Primero llama a veredicto solo con el sala_id para recibir el turno del verificador; "
+    "luego vuelve a llamarlo con su respuesta."
+)
+VEREDICTO_FALTA_CONFIANZA = "Falta 'confianza' (un número de 0 a 1)."
+VEREDICTO_INDICACION = (
+    "Ahora actúa como el verificador: no participaste en la discusión. Revisa la mesa contra el "
+    "objetivo y escribe el veredicto con las secciones {secciones} en {max_palabras} palabras como "
+    "máximo. Luego llama otra vez a veredicto con sala_id, contenido, acuerdos, desacuerdos, "
+    "confianza y plan."
+)
+VEREDICTO_GUARDADO = (
+    "Veredicto guardado y sala cerrada. Muéstrale al usuario el veredicto completo; los hilos de "
+    "cada agente se pueden leer con ver_sala."
+)
+VEREDICTO_YA_GUARDADO = "La sala ya estaba cerrada; este es el veredicto guardado."
+
+# Textos de ver_sala (Markdown)
+VISTA_DESCONOCIDA = "Vista desconocida: '{vista}'. Usa 'mesa', 'hilo' o 'veredicto'."
+VISTA_SIN_SALAS = "Todavía no hay salas guardadas."
+VISTA_TITULO_SALAS = "# Salas guardadas"
+VISTA_MESA_VACIA = "_La mesa está vacía: nadie ha publicado todavía._"
+VISTA_HILO_VACIO = "_{nombre} no ha publicado turnos en esta sala._"
+VISTA_SIN_VEREDICTO = "_La sala todavía no tiene veredicto (estado: {estado})._"
+VISTA_AGENTE_FUERA = "El agente '{id}' no participa en esta sala. Participan: {agentes}."
+
+# Descripciones de las herramientas de sala (las lee Claude).
+HERRAMIENTA_ABRIR_SALA = (
+    "Abre una sala con un objetivo y de 2 a 6 agentes del catálogo (sus ids). "
+    "Protocolo 'panel': cada agente propone una vez sin ver a los demás y luego un "
+    "verificador revisa todo. Devuelve sala_id y el orden de turnos previsto. "
+    "Después llama a siguiente_turno."
+)
+HERRAMIENTA_SIGUIENTE_TURNO = (
+    "Devuelve el turno que toca en la sala: qué agente habla, sus instrucciones, "
+    "skills, su hilo, el resumen de la mesa (si el protocolo lo permite), el "
+    "formato de salida y el límite de palabras. Escribe la intervención como ese "
+    "agente y publícala con publicar_turno. Si responde estado "
+    "'listo_para_veredicto', llama a veredicto. Si el turno sigue pendiente, "
+    "devuelve el mismo turno otra vez."
+)
+HERRAMIENTA_PUBLICAR_TURNO = (
+    "Publica la intervención de un agente: el texto completo (contenido) con las "
+    "secciones de su formato como encabezados, y el artefacto estructurado que va "
+    "a la mesa. Si algo no cumple, no se guarda y devuelve ok=false con la lista "
+    "de errores para corregir ese mismo turno."
+)
+HERRAMIENTA_VEREDICTO = (
+    "Cierre de la sala. Primera llamada, solo con sala_id: devuelve el turno del "
+    "verificador (objetivo y mesa completa). Segunda llamada, con contenido, "
+    "acuerdos, desacuerdos, confianza y plan: lo valida, lo guarda y cierra la sala."
+)
+HERRAMIENTA_VER_SALA = (
+    "Muestra una sala guardada en Markdown. vista='mesa' (artefactos de todos), "
+    "'hilo' (textos completos; con agente, solo los de ese agente) o 'veredicto'. "
+    "Sin sala_id, lista las salas guardadas con su id, fecha y estado."
+)
+PARAM_OBJETIVO = "Qué debe resolver la sala, en palabras del usuario."
+PARAM_AGENTES = "Ids de 2 a 6 agentes, en el orden en que hablarán."
+PARAM_PROTOCOLO = "Protocolo de la sala. Por ahora solo 'panel'."
+PARAM_MAX_RONDAS = "Rondas de discusión (1 a 4). El panel siempre usa 1."
+PARAM_MAX_PALABRAS = "Palabras máximas por intervención (50 a 2000)."
+PARAM_POSTURAS = (
+    "Opcional: postura distinta a la habitual para algún agente, por ejemplo "
+    "{\"ingeniero-industrial\": \"innovador\"}."
+)
+PARAM_SALA_ID = "Id de la sala que devolvió abrir_sala."
+PARAM_TURNO_ID = "Id del turno que devolvió siguiente_turno."
+PARAM_CONTENIDO = "Texto completo de la intervención, con cada sección del formato como encabezado."
+PARAM_ARTEFACTO = "Resumen estructurado de la intervención, que va a la mesa."
+PARAM_VEREDICTO_CONTENIDO = (
+    "Solo en la segunda llamada: el veredicto completo con las secciones Acuerdos, "
+    "Desacuerdos, Confianza y Plan de acción."
+)
+PARAM_ACUERDOS = "Segunda llamada: lista de acuerdos, uno por elemento."
+PARAM_DESACUERDOS = "Segunda llamada: lista de desacuerdos con las posiciones en juego."
+PARAM_CONFIANZA = "Segunda llamada: confianza en el veredicto, de 0 a 1."
+PARAM_PLAN = "Segunda llamada: pasos del plan de acción, en orden."
+PARAM_VISTA = "Qué mostrar: 'mesa', 'hilo' o 'veredicto'."
+PARAM_AGENTE_HILO = "Solo para vista='hilo': id del agente cuyo hilo mostrar."
+ARTEFACTO_CAMPOS: dict[str, str] = {
+    "postura": "propuesta, apoyo, objecion o correccion (en panel siempre 'propuesta').",
+    "resumen": "La idea central en 1 a 3 frases (máximo 600 caracteres).",
+    "supuestos": "Supuestos de los que depende la propuesta.",
+    "riesgos": "Riesgos principales.",
+    "responde_a": "Ids de turnos de otros agentes a los que responde (vacío en panel).",
+    "confianza": "Confianza del agente en su propuesta, de 0 a 1.",
+    "cambiaria_de_opinion_si": "Qué dato o hecho le haría cambiar de opinión.",
+}
+SALA_ABIERTA = "Sala abierta. Llama a siguiente_turno con este sala_id."

@@ -1,6 +1,6 @@
 [project]
 name = "mas-for-people"
-version = "0.2.0"
+version = "0.3.0"
 description = "Salas de agentes especializados que debaten por turnos (MVP vía MCP en Claude Desktop)."
 readme = "README.md"
 requires-python = ">=3.11"
