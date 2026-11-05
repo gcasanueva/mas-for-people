@@ -1,6 +1,6 @@
 [project]
 name = "mas-for-people"
-version = "0.4.0"
+version = "0.7.0"
 description = "Salas de agentes especializados que debaten por turnos (MVP vía MCP en Claude Desktop, con visor de escritorio)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ mas-validar = "mas.validar:main"
 mas-servidor = "mas.servidor.app:main"
 mas-config = "mas.servidor.config:main"
 mas-visor = "mas.visor.app:main"
+mas-exportar = "mas.exportar:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "anyio>=4"]

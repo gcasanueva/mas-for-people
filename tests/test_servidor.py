@@ -38,8 +38,8 @@ async def test_expone_las_herramientas_del_catalogo_y_de_salas():
     async with Client(crear_servidor(RAIZ_PROYECTO)) as cliente:
         herramientas = {h.name: h for h in (await cliente.list_tools()).tools}
     assert sorted(herramientas) == [
-        "abrir_sala", "guardar_agente", "listar_agentes", "publicar_turno", "siguiente_turno", "ver_agente",
-        "ver_sala", "veredicto",
+        "abrir_sala", "exportar_agentes", "exportar_sala", "guardar_agente", "listar_agentes", "publicar_turno",
+        "siguiente_turno", "ver_agente", "ver_sala", "veredicto",
     ]
     for nombre in ("listar_agentes", "ver_agente", "ver_sala"):
         assert herramientas[nombre].annotations.read_only_hint is True
@@ -244,3 +244,14 @@ async def test_prompts_debate_panel_y_crear_agente():
         texto = cr.messages[0].content.text
     assert "una nutricionista" in texto and "solo_validar=true" in texto
     assert "propuesta-tecnica" in texto and "segmentacion" in texto
+
+
+async def test_exportar_por_mcp(tmp_path: Path):
+    async with Client(crear_servidor(RAIZ_PROYECTO, tmp_path / "mas.db")) as c:
+        r = await c.call_tool("exportar_agentes", {"carpeta": str(tmp_path), "agentes": ["periodista"]})
+        assert r.structured_content["escritos"][0] == ".claude/agents/periodista.md"
+        r = await c.call_tool("exportar_agentes", {"carpeta": str(tmp_path / "no-hay")})
+        assert r.is_error and "no existe" in r.content[0].text
+        sala = (await c.call_tool("abrir_sala", {"objetivo": "x", "agentes": ["periodista", "investigador"]})).structured_content
+        r = await c.call_tool("exportar_sala", {"sala_id": sala["sala_id"], "archivo": str(tmp_path / "sala.md")})
+    assert (tmp_path / "sala.md").is_file() and r.structured_content["ok"]

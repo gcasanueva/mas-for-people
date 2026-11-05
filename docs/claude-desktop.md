@@ -50,7 +50,7 @@ uv run mas-validar
 
 `uv sync` descarga Python (si hace falta) y las librerías; la primera vez
 tarda un poco. `mas-validar` debe terminar con algo como
-`3 agentes y 6 skills cargados.`
+`9 agentes y 18 skills cargados.`
 
 ## 4. Obtener el bloque de configuración
 
@@ -103,7 +103,7 @@ En un chat nuevo de Claude Desktop escribe:
 
 Claude pedirá permiso para usar `listar_agentes` o `ver_agente` la primera
 vez; acepta. En el botón de herramientas (ícono de enchufe o deslizadores
-bajo el cuadro de texto) debe aparecer **mas-for-people** con 8 herramientas.
+bajo el cuadro de texto) debe aparecer **mas-for-people** con 10 herramientas.
 
 ## 7. Primera sala (debate o panel)
 
@@ -146,6 +146,13 @@ Para crear un agente propio también basta con pedirlo:
 Claude te muestra el borrador y lo guarda solo cuando le dices que sí. Queda
 en la carpeta `mis-agentes\` del proyecto, solo en tu equipo, y ya se puede
 usar en un debate.
+
+## 9. Exportar
+
+- "Exporta la sala <id> a Markdown": la deja en `exportados\sala-<id>.md`.
+- "Exporta el periodista y el investigador a C:\Users\<tú>\mi-proyecto":
+  quedan como subagentes de Claude Code en `.claude\agents\` de esa carpeta
+  (ver [instalacion.md](instalacion.md#usar-los-agentes-en-claude-code)).
 
 ## Si algo falla
 

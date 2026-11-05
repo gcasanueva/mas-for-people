@@ -124,7 +124,9 @@ SERVIDOR_INSTRUCCIONES = (
     "cada turno usa solo lo que entrega siguiente_turno (no lo que escribiste "
     "como otros agentes): así cada agente conserva su propio punto de vista. Si "
     "publicar_turno devuelve errores, corrige ese mismo turno y vuelve a "
-    "publicarlo. ver_sala muestra salas anteriores. Responde al usuario en español."
+    "publicarlo. ver_sala muestra salas anteriores y exportar_sala las guarda en "
+    "Markdown. exportar_agentes copia agentes a una carpeta para usarlos como "
+    "subagentes en Claude Code. Responde al usuario en español."
 )
 HERRAMIENTA_LISTAR = (
     "Lista los agentes del catálogo con su id, nombre, familia, postura y "
@@ -479,3 +481,45 @@ PROMPT_CREAR = (
 )
 PROMPT_SIN_DESCRIPCION = "Todavía no te he dicho cómo es: pregúntamelo primero.\n\n"
 PROMPT_CON_DESCRIPCION = "Así lo imagino: {descripcion}\n\n"
+
+# --- Exportar (paso 7, CU-06, RF-12, RF-15) ----------------------------------
+
+EXPORTAR_CUERPO_INICIO = "Eres {nombre}. Tu postura por defecto es: {postura}."
+EXPORTAR_FORMATO = "## Formato de respuesta\nResponde en el formato «{nombre}», con estas secciones como encabezados: {secciones}."
+EXPORTAR_AVISO = "## Aviso obligatorio\nIncluye siempre este aviso al responder: {aviso}"
+EXPORTAR_CARPETA_NO_EXISTE = (
+    "La carpeta '{carpeta}' no existe. Indica la carpeta del proyecto donde usarás Claude Code "
+    "(los agentes se escriben en su subcarpeta .claude)."
+)
+EXPORTAR_LISTO = (
+    "Listo. Abre Claude Code en esa carpeta: los agentes aparecen con /agents y Claude los usa "
+    "como subagentes cuando la tarea encaja con su descripción (o si se lo pides por su nombre)."
+)
+EXPORTAR_OMITIDOS = (
+    "Algunos archivos ya existían con otro contenido y no se tocaron (ver 'omitidos'). Para "
+    "sobrescribirlos vuelve a exportar con reemplazar=true."
+)
+HERRAMIENTA_EXPORTAR_AGENTES = (
+    "Exporta agentes del catálogo a Claude Code: escribe cada uno como subagente en "
+    "<carpeta>/.claude/agents/<id>.md y copia sus skills en <carpeta>/.claude/skills/. Sin "
+    "'agentes' exporta todos. No sobrescribe archivos distintos salvo con reemplazar=true."
+)
+HERRAMIENTA_EXPORTAR_SALA = (
+    "Guarda una sala completa (mesa, hilos y veredicto) en un archivo Markdown. Sin 'archivo' la "
+    "guarda en la carpeta exportados/ del proyecto. Devuelve la ruta."
+)
+PARAM_CARPETA_EXPORTAR = (
+    "Carpeta del proyecto donde se usará Claude Code, por ejemplo C:\\Users\\ana\\mi-proyecto. "
+    "Debe existir."
+)
+PARAM_AGENTES_EXPORTAR = "Ids de los agentes a exportar. Vacío para exportar todos."
+PARAM_REEMPLAZAR_EXPORTAR = "true para sobrescribir archivos que ya existan con otro contenido."
+PARAM_ARCHIVO_SALA = "Opcional: ruta del archivo .md. Vacío para usar exportados/sala-<id>.md."
+SALA_EXPORTADA = "Sala guardada en {ruta}. Ábrela con cualquier editor de texto o visor de Markdown."
+SALA_ARCHIVO_ERROR = "No se pudo escribir el archivo '{ruta}': {detalle}"
+CLI_EXPORTAR_USO = (
+    "Uso: mas-exportar <carpeta-del-proyecto> [id-agente ...] [--reemplazar]\n"
+    "Sin ids exporta todos los agentes del catálogo a <carpeta>/.claude/."
+)
+CLI_EXPORTAR_RESUMEN = "{n} agente(s) exportado(s) a {carpeta}"
+CLI_EXPORTAR_OMITIDO = "  - omitido (ya existe con otro contenido): {ruta}"

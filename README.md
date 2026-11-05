@@ -15,7 +15,7 @@ como servidor MCP local en Claude Desktop y una ventana de escritorio
 | 4 | Visor de escritorio (PySide6): catálogo, salas, mesa, hilos, veredicto; búsqueda, exportar y refresco automático | ✅ |
 | 5 | Protocolo debate por rondas: crítica con resumen de mesa, cierre por consenso o por límite, avisos del moderador | ✅ |
 | 6 | `guardar_agente` (crear y editar agentes propios), prompts MCP `debate`/`panel`/`crear_agente`, catálogo completo de 9 agentes y 18 skills | ✅ |
-| 7 | Exportar a Claude Code y a Markdown, guía de instalación | ⏳ |
+| 7 | Exportar a Claude Code (`exportar_agentes`, `mas-exportar`) y sala a Markdown (`exportar_sala`), guía de instalación | ✅ |
 
 ## Probarlo
 
@@ -27,7 +27,10 @@ uv run pytest          # pruebas del núcleo
 uv run mas-validar     # muestra el catálogo y los errores de cada archivo
 uv run mas-config      # bloque para pegar en la configuración de Claude Desktop
 uv run mas-visor       # abre la ventana que muestra catálogo y salas
+uv run mas-exportar <carpeta> [ids...]   # agentes como subagentes de Claude Code
 ```
+
+**Guía de instalación completa (Windows):** [docs/instalacion.md](docs/instalacion.md).
 
 ## Usarlo en Claude Desktop
 
@@ -48,6 +51,8 @@ y reinícialo. El servidor expone estas herramientas:
 | `publicar_turno` | `sala_id`, `turno_id`, `contenido`, `artefacto` | `{ok: true, moderador?}` o `{ok: false, errores}` para corregir ese turno |
 | `veredicto` | `sala_id`; en la 2.ª llamada `contenido`, `acuerdos`, `desacuerdos`, `confianza`, `plan` | 1.ª: turno del verificador (objetivo + mesa). 2.ª: veredicto guardado y sala cerrada |
 | `ver_sala` | `sala_id?`, `vista` (`mesa`/`hilo`/`veredicto`), `agente?` | Markdown; sin `sala_id` lista las salas |
+| `exportar_sala` | `sala_id`, `archivo?` | `{ok, ruta}`: mesa, hilos y veredicto en un `.md` (por defecto en `exportados/`) |
+| `exportar_agentes` | `carpeta`, `agentes[]?`, `reemplazar?` | `{escritos, omitidos}`: `.claude/agents/<id>.md` y `.claude/skills/` para Claude Code |
 
 Y tres **prompts** (atajos que aparecen en Claude Desktop con el botón **+** →
 *mas-for-people*): **debate** (objetivo, agentes opcionales, rondas), **panel**
@@ -180,6 +185,7 @@ src/mas/core/          # núcleo, sin MCP ni ventana
   formatos.py          # formatos de salida (output_contract) y revisión de secciones
   salas.py             # gestor de salas: abrir, turnos, publicar, veredicto, ver
   creacion.py          # guardar_agente: crear y editar agentes propios
+  exportar.py          # agentes y skills al formato de Claude Code
   protocolos/          # máquinas de estados: debate.py y panel.py
   almacen.py           # guardado en SQLite (WAL); el único lugar con SQL
   vistas.py            # salas y fichas en Markdown (ver_sala y visor)
@@ -193,11 +199,13 @@ src/mas/servidor/      # capa MCP (no la importa el núcleo)
 src/mas/visor/         # ventana PySide6 de solo lectura; comando mas-visor
   app.py               # ventana principal y refresco
   vistas/              # catalogo.py, salas.py, sala_detalle.py
+docs/instalacion.md    # guía de instalación y uso de punta a punta
 docs/claude-desktop.md # guía de conexión para Windows
 docs/visor.md          # cómo abrir la ventana en Windows
 agentes/               # un agente.md por agente, agrupados por familia
 mis-agentes/           # agentes que crea el usuario (local, no va a git)
 skills/                # una carpeta por skill con SKILL.md
 datos/                 # mas.db con las salas (se crea solo; no va a git)
+exportados/            # salas exportadas a Markdown (no va a git)
 tests/
 ```

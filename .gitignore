@@ -13,3 +13,6 @@ datos/
 
 # Agentes creados por el usuario: locales, no se comparten (paso 6)
 mis-agentes/
+
+# Salas exportadas a Markdown (exportar_sala)
+exportados/

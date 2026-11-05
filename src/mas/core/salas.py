@@ -12,6 +12,7 @@ No importa nada de MCP (RNF-01): el servidor y las pruebas lo usan igual.
 from __future__ import annotations
 
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -33,12 +34,15 @@ from .modelos import (
     traducir_errores,
 )
 from .protocolos import ProtocoloSala, TransicionInvalida, disponibles, obtener
-from .vistas import vista_hilos, vista_lista_salas, vista_mesa, vista_veredicto
+from .vistas import vista_completa, vista_hilos, vista_lista_salas, vista_mesa, vista_veredicto
 
 # Contar palabras es aproximado: se deja un margen antes de rechazar (RF-14).
 TOLERANCIA_PALABRAS = 1.1
 
 LISTO_PARA_VEREDICTO = "listo_para_veredicto"
+
+# Carpeta (dentro del proyecto) donde exportar_sala deja los .md por defecto.
+CARPETA_EXPORTADOS = "exportados"
 
 
 class ErrorSala(Exception):
@@ -429,6 +433,29 @@ class GestorSalas:
         }
         datos["palabras_contexto"] = palabras_contexto(datos)
         return datos
+
+    # exportar_sala (RF-15) ---------------------------------------------------
+
+    def exportar_sala(self, sala_id: str, archivo: str | Path | None = None) -> dict[str, Any]:
+        """Guarda la sala completa (mesa, hilos y veredicto) en un archivo Markdown."""
+        sala = self._sala(sala_id)
+        turnos = [t for t in self.almacen.turnos(sala.id) if t.artefacto is not None]
+        nombres = {a: (self.catalogo.agentes[a].nombre if a in self.catalogo.agentes else a) for a in sala.agentes}
+        texto = vista_completa(sala, turnos, nombres, self.almacen.veredicto(sala.id))
+        if archivo and str(archivo).strip():
+            ruta = Path(str(archivo).strip()).expanduser()
+            if ruta.suffix.lower() != ".md":
+                ruta = ruta.with_name(ruta.name + ".md")
+        else:
+            ruta = self.catalogo.raiz / CARPETA_EXPORTADOS / f"sala-{sala.id}.md"
+        try:
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_text(texto, encoding="utf-8")
+        except OSError as exc:
+            raise ErrorSala(textos.SALA_ARCHIVO_ERROR.format(ruta=ruta, detalle=exc)) from None
+        ruta = ruta.resolve()
+        return {"ok": True, "ruta": str(ruta), "palabras": contar_palabras(texto),
+                "indicacion": textos.SALA_EXPORTADA.format(ruta=ruta)}
 
     # ver_sala ----------------------------------------------------------------
 

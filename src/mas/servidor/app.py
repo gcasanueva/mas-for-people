@@ -31,6 +31,7 @@ from mas.core import textos
 from mas.core.almacen import Almacen
 from mas.core.catalogo import Catalogo, NoEncontrado
 from mas.core.creacion import guardar_agente, opciones_creacion
+from mas.core.exportar import ErrorExportar, exportar_claude_code
 from mas.core.formatos import formato
 from mas.core.modelos import Artefacto
 from mas.core.salas import ErrorSala, GestorSalas
@@ -160,6 +161,20 @@ def crear_servidor(raiz: Path | str, bd: Path | str | None = None) -> MCPServer:
             id=id, sensible=sensible, aviso=aviso, reemplazar=reemplazar, solo_validar=solo_validar,
         )
 
+    @mcp.tool(
+        name="exportar_agentes", title="Exportar a Claude Code", description=textos.HERRAMIENTA_EXPORTAR_AGENTES,
+        annotations=ESCRITURA,
+    )
+    def _exportar_agentes(
+        carpeta: Annotated[str, Field(description=textos.PARAM_CARPETA_EXPORTAR)],
+        agentes: Annotated[list[str] | None, Field(description=textos.PARAM_AGENTES_EXPORTAR)] = None,
+        reemplazar: Annotated[bool, Field(description=textos.PARAM_REEMPLAZAR_EXPORTAR)] = False,
+    ) -> dict[str, Any]:
+        try:
+            return exportar_claude_code(catalogo, carpeta, agentes, reemplazar)
+        except ErrorExportar as exc:
+            raise ToolError(str(exc)) from None
+
     _registrar_salas(mcp, salas)
     _registrar_prompts(mcp, catalogo)
 
@@ -219,6 +234,16 @@ def _registrar_salas(mcp: MCPServer, salas: GestorSalas) -> None:
         plan: Annotated[list[str] | None, Field(description=textos.PARAM_PLAN)] = None,
     ) -> dict[str, Any]:
         return ejecutar(salas.veredicto, sala_id, contenido, acuerdos, desacuerdos, confianza, plan)
+
+    @mcp.tool(
+        name="exportar_sala", title="Exportar sala a Markdown", description=textos.HERRAMIENTA_EXPORTAR_SALA,
+        annotations=ESCRITURA,
+    )
+    def _exportar_sala(
+        sala_id: Annotated[str, Field(description=textos.PARAM_SALA_ID)],
+        archivo: Annotated[str | None, Field(description=textos.PARAM_ARCHIVO_SALA)] = None,
+    ) -> dict[str, Any]:
+        return ejecutar(salas.exportar_sala, sala_id, archivo)
 
     @mcp.tool(name="ver_sala", title="Ver sala", description=textos.HERRAMIENTA_VER_SALA, annotations=SOLO_LECTURA)
     def _ver_sala(
