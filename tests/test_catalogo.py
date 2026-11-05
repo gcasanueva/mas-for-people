@@ -14,8 +14,11 @@ from mas.core.catalogo import Catalogo, NoEncontrado
 def test_catalogo_del_repo_carga_sin_errores():
     cat = Catalogo(RAIZ_PROYECTO)
     assert [str(e) for e in cat.errores] == []
-    assert set(cat.agentes) == {"ingeniero-industrial", "economista-ortodoxo", "periodista"}
-    assert len(cat.skills) == 6
+    assert set(cat.agentes) == {
+        "ingeniero-industrial", "ingeniero-informatico", "ingeniero-ambiental", "economista-ortodoxo",
+        "economista-heterodoxo", "especialista-marketing", "periodista", "investigador", "abogado-del-diablo",
+    }
+    assert len(cat.skills) == 18
 
 
 def test_cada_agente_del_repo_usa_skills_existentes():
@@ -26,16 +29,17 @@ def test_cada_agente_del_repo_usa_skills_existentes():
 
 def test_listar_por_familia_y_texto():
     cat = Catalogo(RAIZ_PROYECTO)
-    assert [a.id for a in cat.listar(familia="ingenieria")] == ["ingeniero-industrial"]
-    assert [a.id for a in cat.listar(familia="Ingeniería")] == ["ingeniero-industrial"]
-    assert [a.id for a in cat.listar(texto="ESCÉPTICO")] == ["periodista"]
-    assert [a.id for a in cat.listar(texto="costo beneficio")] == ["economista-ortodoxo"]
+    ingenieros = ["ingeniero-ambiental", "ingeniero-industrial", "ingeniero-informatico"]
+    assert [a.id for a in cat.listar(familia="ingenieria")] == ingenieros  # CA-01
+    assert [a.id for a in cat.listar(familia="Ingeniería")] == ingenieros
+    assert [a.id for a in cat.listar(texto="ESCÉPTICO")] == ["periodista", "abogado-del-diablo"]
+    assert [a.id for a in cat.listar(texto="costo beneficio")] == ["economista-heterodoxo", "economista-ortodoxo"]
     assert cat.listar(texto="astronauta") == []
 
 
 def test_familias_y_ficha():
     cat = Catalogo(RAIZ_PROYECTO)
-    assert list(cat.familias()) == ["comunicacion", "economia", "ingenieria"]
+    assert list(cat.familias()) == ["comunicacion", "economia", "ingenieria", "investigacion", "transversal"]
     ficha = cat.agente("ingeniero-industrial").ficha()
     assert ficha == {
         "id": "ingeniero-industrial",
@@ -171,7 +175,39 @@ def test_comando_validar(capsys, raiz_vacia: Path):
     from mas.validar import main
 
     assert main([str(RAIZ_PROYECTO)]) == 0
-    assert "3 agentes y 6 skills cargados." in capsys.readouterr().out
+    assert "9 agentes y 18 skills cargados." in capsys.readouterr().out
     crear_agente(raiz_vacia, "x", "a1", texto="Solo texto.\n")
     assert main([str(raiz_vacia)]) == 1
     assert "1 problema(s) por corregir" in capsys.readouterr().out
+
+
+def test_catalogo_completo_de_la_ers():
+    """Paso 6: 9 agentes de usuario con la postura, skills y formato de la ERS."""
+    cat = Catalogo(RAIZ_PROYECTO)
+    esperado = {
+        "ingeniero-informatico": ("ingenieria", "pragmático", ["arquitectura-software", "estimacion-esfuerzo"], "propuesta-tecnica"),
+        "ingeniero-industrial": ("ingenieria", "conservador", ["mejora-procesos", "analisis-costos"], "propuesta-tecnica"),
+        "ingeniero-ambiental": ("ingenieria", "innovador", ["evaluacion-impacto", "normativa-ambiental"], "propuesta-tecnica"),
+        "economista-ortodoxo": ("economia", "conservador (mercado, disciplina fiscal)", ["analisis-costo-beneficio", "indicadores-macro"], "analisis-economico"),
+        "economista-heterodoxo": ("economia", "no conservador (Estado activo, distribución)", ["analisis-costo-beneficio", "economia-politica"], "analisis-economico"),
+        "especialista-marketing": ("comunicacion", "centrado en el cliente", ["segmentacion", "propuesta-de-valor"], "plan-de-mercado"),
+        "periodista": ("comunicacion", "escéptico", ["verificacion-fuentes", "piramide-invertida"], "nota-critica"),
+        "investigador": ("investigacion", "basado en evidencia", ["busqueda-literatura", "evaluar-evidencia"], "informe-con-fuentes"),
+        "abogado-del-diablo": ("transversal", "escéptico", ["deteccion-sesgos"], "objeciones-priorizadas"),
+    }
+    for id_, (familia, postura, skills, formato) in esperado.items():
+        a = cat.agente(id_)
+        assert (a.familia, a.postura, a.skills, a.formato_salida) == (familia, postura, skills, formato), id_
+    # Skills de los agentes de sistema (moderador y verificador).
+    assert {"protocolos-sala", "verificacion-objetivo"} <= set(cat.skills)
+
+
+def test_carga_agentes_propios_de_mis_agentes(raiz_vacia: Path):
+    crear_agente(raiz_vacia, "x", "base")
+    escribir(raiz_vacia / "mis-agentes" / "salud" / "mio" / "agente.md",
+             "---\nname: mio\ndescription: d\nstance: neutral\noutput_contract: propuesta-tecnica\n---\n\nHola.\n")
+    cat = Catalogo(raiz_vacia)
+    assert set(cat.agentes) == {"base", "mio"}
+    assert cat.agente("mio").familia == "salud"
+    assert cat.es_propio("mio") and not cat.es_propio("base")
+    assert cat.ficha(cat.agente("mio"))["propio"] is True

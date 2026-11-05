@@ -41,8 +41,9 @@ cursor. Puedes tener la ventana abierta al mismo tiempo que Claude Desktop.
   - **Veredicto**: el cierre del verificador.
 - **Catálogo**: agentes agrupados por familia y, al elegir uno, su ficha
   (postura, skills, formato de salida e instrucciones). Si editas un
-  `agente.md` a mano, pulsa **Recargar** (o F5). Los archivos con errores
-  aparecen al final del árbol con el motivo.
+  `agente.md` a mano o creas uno desde Claude Desktop, pulsa **Recargar**
+  (o F5). Los agentes que creaste llevan la marca *· propio*. Los archivos
+  con errores aparecen al final del árbol con el motivo.
 
 La ventana relee la base de datos cada 3 segundos: si Claude está
 llevando una sala, los turnos aparecen solos, sin reiniciar nada.

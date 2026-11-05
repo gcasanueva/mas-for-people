@@ -21,6 +21,10 @@ from . import textos
 from .modelos import Agente, ErrorValidacion, Skill, traducir_errores
 
 NOMBRE_ARCHIVO_AGENTE = "agente.md"
+CARPETA_AGENTES = "agentes"
+# Agentes creados por el usuario: solo en este equipo, fuera de git (no se
+# comparten con nadie en el MVP).
+CARPETA_PROPIOS = "mis-agentes"
 NOMBRE_ARCHIVO_SKILL = "SKILL.md"
 
 
@@ -123,7 +127,8 @@ class Catalogo:
 
     def __init__(self, raiz: Path | str) -> None:
         self.raiz = Path(raiz)
-        self.carpeta_agentes = self.raiz / "agentes"
+        self.carpeta_agentes = self.raiz / CARPETA_AGENTES
+        self.carpeta_propios = self.raiz / CARPETA_PROPIOS
         self.carpeta_skills = self.raiz / "skills"
         self.agentes: dict[str, Agente] = {}
         self.skills: dict[str, Skill] = {}
@@ -188,25 +193,29 @@ class Catalogo:
                 )
             )
             return
-        for ruta in sorted(self.carpeta_agentes.rglob(NOMBRE_ARCHIVO_AGENTE)):
+        rutas = [(self.carpeta_agentes, r) for r in sorted(self.carpeta_agentes.rglob(NOMBRE_ARCHIVO_AGENTE))]
+        if self.carpeta_propios.is_dir():
+            rutas += [(self.carpeta_propios, r) for r in sorted(self.carpeta_propios.rglob(NOMBRE_ARCHIVO_AGENTE))]
+        for base, ruta in rutas:
             archivo = self._relativa(ruta)
             texto = self._leer(ruta)
             if texto is None:
                 continue
-            partes = ruta.relative_to(self.carpeta_agentes).parts
+            partes = ruta.relative_to(base).parts
             familia_carpeta = partes[0] if len(partes) > 1 else None
             resultado = parsear_agente(texto, archivo, familia_carpeta)
             if isinstance(resultado, list):
                 self.errores.extend(resultado)
                 continue
-            errores = self._errores_de_referencias(resultado, archivo)
+            errores = self.errores_de_referencias(resultado, archivo)
             if errores:
                 self.errores.extend(errores)
                 continue
             resultado.ruta = ruta
             self.agentes[resultado.id] = resultado
 
-    def _errores_de_referencias(self, agente: Agente, archivo: str) -> list[ErrorValidacion]:
+    def errores_de_referencias(self, agente: Agente, archivo: str) -> list[ErrorValidacion]:
+        """Skills inexistentes e id repetido (lo que el modelo solo no puede ver)."""
         errores = [
             ErrorValidacion(
                 archivo=archivo,
@@ -230,6 +239,16 @@ class Catalogo:
         return errores
 
     # Consultas ---------------------------------------------------------------
+
+    def es_propio(self, agente: Agente | str) -> bool:
+        """Si el agente lo creó el usuario (vive en ``mis-agentes/``)."""
+        if isinstance(agente, str):
+            agente = self.agente(agente)
+        return agente.ruta is not None and agente.ruta.is_relative_to(self.carpeta_propios)
+
+    def ficha(self, agente: Agente) -> dict[str, Any]:
+        """Ficha corta con la marca de agente propio."""
+        return {**agente.ficha(), "propio": self.es_propio(agente)}
 
     def listar(self, familia: str | None = None, texto: str | None = None) -> list[Agente]:
         """Agentes ordenados por familia y nombre, filtrando por familia o texto (RF-03)."""

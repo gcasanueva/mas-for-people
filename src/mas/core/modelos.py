@@ -61,7 +61,7 @@ Id = Annotated[str, AfterValidator(_validar_id)]
 """Identificador en minúsculas con guiones, p. ej. ``ingeniero-industrial``."""
 
 TextoCorto = Annotated[str, Field(min_length=1, max_length=120)]
-ItemCorto = Annotated[str, Field(min_length=1, max_length=200)]
+ItemCorto = Annotated[str, Field(min_length=1, max_length=120)]
 
 
 def contar_palabras(texto: str) -> int:
@@ -245,8 +245,8 @@ class Artefacto(BaseModel):
     postura: PosturaArtefacto
     resumen: str = Field(min_length=1, max_length=600)
     # Listas cortas: la mesa debe caber en el contexto de cada turno (RNF-02).
-    supuestos: list[ItemCorto] = Field(default_factory=list, max_length=5)
-    riesgos: list[ItemCorto] = Field(default_factory=list, max_length=5)
+    supuestos: list[ItemCorto] = Field(default_factory=list, max_length=4)
+    riesgos: list[ItemCorto] = Field(default_factory=list, max_length=4)
     responde_a: list[str] = Field(default_factory=list)
     confianza: float = Field(ge=0.0, le=1.0)
     cambiaria_de_opinion_si: str = ""
