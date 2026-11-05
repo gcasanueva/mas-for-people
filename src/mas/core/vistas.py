@@ -61,11 +61,17 @@ def _seccion_mesa(turnos: list[Turno], nombres: dict[str, str]) -> str:
     partes = ["", "## Mesa", ""]
     if not turnos:
         partes.append(textos.VISTA_MESA_VACIA)
+    varias_rondas = len({t.ronda for t in turnos}) > 1
+    nivel = "####" if varias_rondas else "###"
+    ronda_actual = 0
     for t in turnos:
         a = t.artefacto
         assert a is not None
+        if varias_rondas and t.ronda != ronda_actual:
+            ronda_actual = t.ronda
+            partes += [textos.VISTA_RONDA.format(ronda=t.ronda), ""]
         partes.append(
-            f"### {nombres.get(t.agente_id, t.agente_id)} · ronda {t.ronda} · {a.postura.value} "
+            f"{nivel} {nombres.get(t.agente_id, t.agente_id)} · ronda {t.ronda} · {a.postura.value} "
             f"· confianza {a.confianza:.2f}"
         )
         partes.append("")

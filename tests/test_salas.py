@@ -13,7 +13,7 @@ from mas.core.almacen import Almacen
 from mas.core.catalogo import Catalogo
 from mas.core.formatos import formato, secciones_faltantes
 from mas.core.modelos import EstadoSala
-from mas.core.protocolos import Panel, TransicionInvalida
+from mas.core.protocolos import Debate, Panel, TransicionInvalida
 from mas.core.salas import LISTO_PARA_VEREDICTO, ErrorSala, GestorSalas, cargar_verificador
 
 AGENTES = ["ingeniero-industrial", "economista-ortodoxo", "periodista"]
@@ -171,7 +171,7 @@ def test_secciones_se_reconocen_con_distintos_estilos():
 
 
 def test_veredicto_no_deja_saltar_estados(gestor: GestorSalas):
-    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2])["sala_id"]
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2], "panel")["sala_id"]
     with pytest.raises(ErrorSala, match="quedan turnos"):
         gestor.veredicto(sala_id)
     jugar_turnos(gestor, sala_id)
@@ -213,7 +213,6 @@ def test_maquina_de_estados_del_panel():
     [
         ({"agentes": ["ingeniero-industrial", "astronauta"]}, "astronauta' no está en el catálogo"),
         ({"agentes": ["periodista"]}, "al menos 2"),
-        ({"protocolo": "debate"}, "todavía no está disponible"),
         ({"protocolo": "asamblea"}, "Protocolo desconocido"),
         ({"posturas": {"economista-ortodoxo": "x"}}, "no está en la sala"),
         ({"objetivo": "  "}, "objetivo"),
@@ -231,7 +230,7 @@ def test_abrir_sala_con_errores_claros(gestor: GestorSalas, argumentos: dict, me
 
 def test_ver_sala(gestor: GestorSalas):
     assert "Todavía no hay salas" in gestor.ver_sala()
-    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES)["sala_id"]
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES, "panel")["sala_id"]
     assert "La mesa está vacía" in gestor.ver_sala(sala_id)
     jugar_turnos(gestor, sala_id)
     gestor.veredicto(sala_id)
@@ -259,25 +258,31 @@ def test_ver_sala(gestor: GestorSalas):
 # --- No funcionales ------------------------------------------------------------
 
 
-def test_contexto_de_cada_turno_cabe_en_3000_palabras(tmp_path: Path, bd: Path):
-    """RNF-02 / CA-04: 6 agentes, textos al límite, verificador incluido."""
+@pytest.mark.parametrize("protocolo", ["panel", "debate"])
+def test_contexto_de_cada_turno_cabe_en_3000_palabras(tmp_path: Path, bd: Path, protocolo: str):
+    """RNF-02 / CA-04: 6 agentes, 3 rondas, textos al límite, verificador incluido."""
     raiz = tmp_path / "raiz"
     shutil.copytree(RAIZ_PROYECTO / "skills", raiz / "skills")
     shutil.copytree(RAIZ_PROYECTO / "agentes", raiz / "agentes")
-    for original in AGENTES:  # 3 agentes más, copias de los reales con otro nombre
-        origen = next((raiz / "agentes").rglob(f"{original}/agente.md"))
-        copia = origen.parent.parent / f"{original}-bis" / "agente.md"
-        copia.parent.mkdir()
-        copia.write_text(origen.read_text(encoding="utf-8").replace(f"name: {original}", f"name: {original}-bis"),
-                         encoding="utf-8")
     gestor = GestorSalas(Catalogo(raiz), Almacen(bd))
-    assert len(gestor.catalogo.agentes) == 6
-    sala_id = gestor.abrir_sala(OBJETIVO, sorted(gestor.catalogo.agentes), max_palabras=400)["sala_id"]
+    # Los 6 agentes con más instrucciones y skills: el peor caso.
+    def tamano(a):
+        return len(a.instrucciones.split()) + sum(len(s.instrucciones.split()) for s in gestor.catalogo.skills_de(a))
+    agentes = sorted(gestor.catalogo.agentes.values(), key=tamano, reverse=True)[:6]
+    sala_id = gestor.abrir_sala(OBJETIVO, [a.id for a in agentes], protocolo, max_rondas=3, max_palabras=400)["sala_id"]
+    rondas = set()
     while (t := gestor.siguiente_turno(sala_id)).get("estado") != LISTO_PARA_VEREDICTO:
-        assert t["palabras_contexto"] <= 3000, t["agente"]
+        assert t["palabras_contexto"] <= 3000, (t["agente"], t["ronda"], t["palabras_contexto"])
+        rondas.add(t["ronda"])
         relleno = "palabra " * (400 // len(t["formato_salida"]["secciones"]) - 3)
-        r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t, relleno), artefacto(resumen="r" * 600))
+        if t["ronda"] == 1:
+            art = artefacto(resumen="palabra " * 75, supuestos=["frase " * 30] * 5, riesgos=["frase " * 30] * 5)
+        else:  # siempre corrige, para que el debate llegue a la última ronda
+            art = artefacto(postura="correccion", resumen="palabra " * 75, responde_a=[t["resumen_mesa"][0]["turno_id"]],
+                            supuestos=["frase " * 30] * 5, riesgos=["frase " * 30] * 5)
+        r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t, relleno), art)
         assert r["ok"], r
+    assert rondas == ({1} if protocolo == "panel" else {1, 2, 3})
     assert gestor.veredicto(sala_id)["palabras_contexto"] <= 3000
 
 
@@ -297,3 +302,121 @@ def test_lectura_en_paralelo_con_wal(gestor: GestorSalas, bd: Path):
         assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     finally:
         con.close()
+
+
+# --- Debate por rondas (paso 5) -----------------------------------------------
+
+
+def jugar_ronda(gestor: GestorSalas, sala_id: str, posturas: dict[str, str]) -> list[dict]:
+    """Juega una ronda: cada agente publica con la postura indicada (por defecto, propuesta)."""
+    contextos, respuestas = [], []
+    for _ in range(len(posturas)):
+        t = gestor.siguiente_turno(sala_id)
+        assert "turno_id" in t, t
+        postura = posturas[t["agente"]["id"]]
+        responde = [t["resumen_mesa"][0]["turno_id"]] if postura in ("objecion", "correccion") else []
+        r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t),
+                                  artefacto(postura=postura, responde_a=responde, resumen=f"{postura} de {t['agente']['id']}"))
+        assert r["ok"], r
+        contextos.append(t)
+        respuestas.append(r)
+    return contextos, respuestas
+
+
+def test_debate_cierra_por_consenso(gestor: GestorSalas):
+    """CA-03: el debate de CU-03 termina solo cuando nadie objeta."""
+    abierta = gestor.abrir_sala(OBJETIVO, AGENTES, max_rondas=3)
+    sala_id = abierta["sala_id"]
+    assert abierta["protocolo"] == "debate" and abierta["max_rondas"] == 3
+    assert [p["ronda"] for p in abierta["plan"]] == [1, 1, 1, 2, 2, 2, 3, 3, 3]
+
+    r1, resp1 = jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES, "propuesta"))
+    assert all(c["resumen_mesa"] == [] and c["hilo"] == [] for c in r1)  # ronda 1: nadie ve a nadie
+    assert all(c["posturas_artefacto"] == ["propuesta"] for c in r1)
+    assert "sigue la ronda 2" in resp1[-1]["moderador"]
+    assert "moderador" not in resp1[0]
+    assert gestor.almacen.sala(sala_id).estado is EstadoSala.PROPUESTAS
+
+    r2, resp2 = jugar_ronda(gestor, sala_id, {"ingeniero-industrial": "apoyo", "economista-ortodoxo": "objecion",
+                                              "periodista": "correccion"})
+    assert gestor.almacen.sala(sala_id).estado is EstadoSala.CRITICA
+    primero = r2[0]
+    assert primero["ronda"] == 2 and primero["posturas_artefacto"] == ["apoyo", "correccion", "objecion"]
+    assert [m["agente"] for m in primero["resumen_mesa"]] == AGENTES[1:]  # ve a los demás, no a sí mismo
+    assert primero["hilo"][0]["contenido"]  # su propia intervención anterior, completa
+    assert "ronda de crítica" in primero["indicacion"]
+    # El último de la ronda 2 ve lo que ya dijeron en esta ronda los otros dos.
+    assert {m["ronda"] for m in r2[-1]["resumen_mesa"]} == {2}
+    assert "sigue la ronda 3" in resp2[-1]["moderador"]
+
+    r3, resp3 = jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES, "apoyo"))
+    assert len(r3[0]["hilo"]) == 2 and "resumen" in r3[0]["hilo"][0] and "contenido" in r3[0]["hilo"][1]
+    assert "consenso" in resp3[-1]["moderador"]
+    listo = gestor.siguiente_turno(sala_id)
+    assert listo["estado"] == LISTO_PARA_VEREDICTO and listo["motivo_cierre"] == "consenso"
+
+    v = gestor.veredicto(sala_id)
+    assert v["motivo_cierre"] == "consenso" and v["rondas_jugadas"] == 3 and len(v["mesa"]) == 9
+    assert gestor.veredicto(sala_id, VEREDICTO, confianza=0.7)["estado"] == "cerrada"
+
+
+def test_debate_termina_antes_si_hay_consenso_en_la_ronda_2(gestor: GestorSalas):
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2], max_rondas=4)["sala_id"]
+    jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "propuesta"))
+    _, resp = jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "apoyo"))
+    assert "consenso" in resp[-1]["moderador"]
+    assert "veredicto" in resp[-1]["indicacion"]
+    assert gestor.siguiente_turno(sala_id)["motivo_cierre"] == "consenso"
+    assert len(gestor.almacen.turnos(sala_id)) == 4
+
+
+def test_debate_cierra_por_limite_de_rondas(gestor: GestorSalas):
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2], max_rondas=2)["sala_id"]
+    jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "propuesta"))
+    _, resp = jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "objecion"))
+    assert "máximo de rondas" in resp[-1]["moderador"]
+    listo = gestor.siguiente_turno(sala_id)
+    assert listo["motivo_cierre"] == "limite" and listo["rondas_jugadas"] == 2
+
+
+def test_debate_de_una_ronda_va_directo_al_veredicto(gestor: GestorSalas):
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2], max_rondas=1)["sala_id"]
+    jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "propuesta"))
+    assert gestor.siguiente_turno(sala_id)["estado"] == LISTO_PARA_VEREDICTO
+    assert gestor.veredicto(sala_id)["estado"] == "verificacion"
+
+
+def test_debate_valida_posturas_y_responde_a(gestor: GestorSalas):
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2])["sala_id"]
+    jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "propuesta"))
+    t = gestor.siguiente_turno(sala_id)
+    r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t), artefacto())
+    assert not r["ok"] and "apoyo, correccion, objecion" in r["errores"][0]
+    r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t), artefacto(postura="objecion"))
+    assert not r["ok"] and "responde_a" in r["errores"][0]
+    r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t),
+                              artefacto(postura="objecion", responde_a=[t["turno_id"]]))
+    assert not r["ok"] and t["turno_id"] in r["errores"][0]  # no puede responderse a sí mismo
+    r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t), artefacto(postura="apoyo"))
+    assert r["ok"]
+
+
+def test_maquina_de_estados_del_debate():
+    d = Debate()
+    d.validar_transicion(EstadoSala.PROPUESTAS, EstadoSala.CRITICA)
+    d.validar_transicion(EstadoSala.CRITICA, EstadoSala.VERIFICACION)
+    d.validar_transicion(EstadoSala.PROPUESTAS, EstadoSala.VERIFICACION)  # max_rondas = 1
+    with pytest.raises(TransicionInvalida):
+        d.validar_transicion(EstadoSala.CRITICA, EstadoSala.PROPUESTAS)
+    with pytest.raises(TransicionInvalida):
+        d.validar_transicion(EstadoSala.CRITICA, EstadoSala.CERRADA)
+
+
+def test_ver_sala_de_un_debate(gestor: GestorSalas):
+    sala_id = gestor.abrir_sala(OBJETIVO, AGENTES[:2])["sala_id"]
+    jugar_ronda(gestor, sala_id, dict.fromkeys(AGENTES[:2], "propuesta"))
+    jugar_ronda(gestor, sala_id, {AGENTES[0]: "apoyo", AGENTES[1]: "correccion"})
+    mesa = gestor.ver_sala(sala_id, "mesa")
+    assert "### Ronda 1" in mesa and "### Ronda 2" in mesa
+    assert "ronda 2 · correccion" in mesa
+    assert gestor.ver_sala(sala_id, "hilo", AGENTES[0]).count("### Ronda") == 2

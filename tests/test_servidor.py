@@ -109,7 +109,8 @@ def _texto(turno: dict) -> str:
 
 async def test_sala_panel_completa_por_mcp(tmp_path: Path):
     async with Client(crear_servidor(RAIZ_PROYECTO, tmp_path / "mas.db")) as c:
-        r = await c.call_tool("abrir_sala", {"objetivo": "Bajar costos", "agentes": ["periodista", "ingeniero-industrial"]})
+        r = await c.call_tool("abrir_sala", {"objetivo": "Bajar costos", "agentes": ["periodista", "ingeniero-industrial"],
+                                            "protocolo": "panel"})
         sala_id = r.structured_content["sala_id"]
         while True:
             t = (await c.call_tool("siguiente_turno", {"sala_id": sala_id})).structured_content

@@ -156,7 +156,7 @@ def _registrar_salas(mcp: MCPServer, salas: GestorSalas) -> None:
     def _abrir_sala(
         objetivo: Annotated[str, Field(description=textos.PARAM_OBJETIVO)],
         agentes: Annotated[list[str], Field(description=textos.PARAM_AGENTES)],
-        protocolo: Annotated[str, Field(description=textos.PARAM_PROTOCOLO)] = "panel",
+        protocolo: Annotated[str, Field(description=textos.PARAM_PROTOCOLO)] = "debate",
         max_rondas: Annotated[int, Field(description=textos.PARAM_MAX_RONDAS)] = 2,
         max_palabras: Annotated[int, Field(description=textos.PARAM_MAX_PALABRAS)] = 400,
         posturas: Annotated[dict[str, str] | None, Field(description=textos.PARAM_POSTURAS)] = None,

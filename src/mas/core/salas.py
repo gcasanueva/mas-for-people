@@ -110,7 +110,7 @@ class GestorSalas:
         self,
         objetivo: str,
         agentes: list[str],
-        protocolo: str = Protocolo.PANEL.value,
+        protocolo: str = Protocolo.DEBATE.value,
         max_rondas: int = 2,
         max_palabras: int = 400,
         posturas: dict[str, str] | None = None,
@@ -150,9 +150,10 @@ class GestorSalas:
             "sala_id": sala.id,
             "protocolo": sala.protocolo.value,
             "estado": sala.estado.value,
+            "max_rondas": sala.max_rondas,
             "max_palabras": sala.max_palabras,
             "plan": [p.como_dict() for p in proto.plan(sala)],
-            "indicacion": textos.SALA_ABIERTA,
+            "indicacion": textos.SALA_ABIERTA_DEBATE if proto_enum is Protocolo.DEBATE else textos.SALA_ABIERTA,
         }
 
     # siguiente_turno ---------------------------------------------------------
@@ -169,12 +170,12 @@ class GestorSalas:
             proto = self._protocolo(sala)
             turnos = self.almacen.turnos(sala.id, con)
             if sala.estado is EstadoSala.VERIFICACION:
-                return self._listo(sala)
+                return self._listo(sala, proto, turnos)
             pendiente = next((t for t in turnos if t.artefacto is None), None)
             if pendiente is None:
                 paso = proto.siguiente(sala, turnos)
                 if paso is None:
-                    return self._listo(sala)
+                    return self._listo(sala, proto, turnos)
                 self._agente(paso.agente_id)  # el agente aún existe en el catálogo
                 pendiente = Turno(sala_id=sala.id, agente_id=paso.agente_id, ronda=paso.ronda)
                 self.almacen.crear_turno(con, pendiente, paso.orden)
@@ -183,8 +184,14 @@ class GestorSalas:
         return self._contexto_turno(sala, proto, pendiente, turnos)
 
     @staticmethod
-    def _listo(sala: Sala) -> dict[str, Any]:
-        return {"sala_id": sala.id, "estado": LISTO_PARA_VEREDICTO, "indicacion": textos.LISTO_PARA_VEREDICTO}
+    def _listo(sala: Sala, proto: ProtocoloSala, turnos: list[Turno]) -> dict[str, Any]:
+        datos: dict[str, Any] = {"sala_id": sala.id, "estado": LISTO_PARA_VEREDICTO}
+        motivo = proto.cierre(sala, turnos)
+        if motivo:
+            datos["motivo_cierre"] = motivo
+            datos["rondas_jugadas"] = max((t.ronda for t in turnos), default=0)
+        datos["indicacion"] = textos.LISTO_PARA_VEREDICTO
+        return datos
 
     def _contexto_turno(
         self, sala: Sala, proto: ProtocoloSala, turno: Turno, turnos: list[Turno]
@@ -195,9 +202,9 @@ class GestorSalas:
         assert fmt is not None  # el modelo Agente ya valida el formato
         postura = sala.posturas.get(agente.id, agente.postura)
         publicados = [t for t in turnos if t.artefacto is not None]
-        hilo = [{"ronda": t.ronda, "contenido": t.contenido} for t in publicados if t.agente_id == agente.id]
+        hilo = _hilo(publicados, agente.id)
         ve_mesa = proto.ve_mesa(sala, turno.ronda)
-        resumen_mesa = Mesa.desde_turnos(sala.id, publicados).resumen(excluir=agente.id) if ve_mesa else []
+        resumen_mesa = _ultimos_de_cada_uno(Mesa.desde_turnos(sala.id, publicados).resumen(excluir=agente.id)) if ve_mesa else []
         skills = [
             {"id": s.id, "descripcion": s.descripcion, "instrucciones": s.instrucciones}
             for s in self.catalogo.skills_de(agente)
@@ -209,6 +216,7 @@ class GestorSalas:
             "objetivo": sala.objetivo,
             "agente": {"id": agente.id, "nombre": agente.nombre, "postura": postura},
             "ronda": turno.ronda,
+            "max_rondas": sala.max_rondas,
             "instrucciones": agente.instrucciones,
             "skills": skills,
             "hilo": hilo,
@@ -223,7 +231,8 @@ class GestorSalas:
                 secciones=", ".join(fmt.secciones),
                 max_palabras=sala.max_palabras,
                 mesa=textos.TURNO_INDICACION_MESA if ve_mesa else textos.TURNO_INDICACION_SIN_MESA,
-            ),
+            )
+            + (textos.TURNO_INDICACION_CRITICA if ve_mesa and sala.protocolo is Protocolo.DEBATE else ""),
         }
         if agente.sensible and agente.aviso:
             datos["aviso"] = agente.aviso
@@ -270,8 +279,9 @@ class GestorSalas:
                             permitidas=", ".join(sorted(p.value for p in permitidas)), postura=art.postura.value
                         )
                     )
-                ids = {t.id for t in turnos}
+                ids = {t.id for t in turnos if t.artefacto is not None and t.id != turno.id}
                 errores += [textos.TURNO_RESPONDE_A_INEXISTENTE.format(id=r) for r in art.responde_a if r not in ids]
+                errores += proto.errores_artefacto(turno.ronda, art)
             errores += self._errores_texto(contenido, agente.formato_salida, sala.max_palabras)
             if errores:
                 return {"ok": False, "errores": errores, "indicacion": textos.TURNO_CORREGIR}
@@ -279,15 +289,20 @@ class GestorSalas:
             assert art is not None
             turno = turno.model_copy(update={"contenido": contenido.strip(), "artefacto": art})
             self.almacen.publicar_turno(con, turno)
-            publicados = sum(1 for t in turnos if t.artefacto is not None) + 1
+            turnos = [turno if t.id == turno.id else t for t in turnos]
+            publicados = sum(1 for t in turnos if t.artefacto is not None)
             quedan = proto.siguiente(sala, turnos) is not None
-        return {
+        datos: dict[str, Any] = {
             "ok": True,
             "turno_id": turno.id,
             "palabras": turno.palabras,
             "turnos_publicados": publicados,
-            "indicacion": textos.TURNO_PUBLICADO_SIGUE if quedan else textos.TURNO_PUBLICADO_VEREDICTO,
         }
+        moderador = _nota_moderador(sala, proto, turnos, turno.ronda)
+        if moderador:
+            datos["moderador"] = moderador
+        datos["indicacion"] = textos.TURNO_PUBLICADO_SIGUE if quedan else textos.TURNO_PUBLICADO_VEREDICTO
+        return datos
 
     @staticmethod
     def _errores_texto(contenido: str, id_formato: str, max_palabras: int) -> list[str]:
@@ -372,23 +387,35 @@ class GestorSalas:
         fmt = formato(self.verificador.formato_salida)
         assert fmt is not None
         nombres = {a: self.catalogo.agentes[a].nombre if a in self.catalogo.agentes else a for a in sala.agentes}
-        mesa = [
-            {
+        publicados = [t for t in turnos if t.artefacto is not None]
+        # Artefacto completo de la última intervención de cada agente; de las
+        # anteriores, solo postura y resumen (la trayectoria), para no pasar
+        # de ~3.000 palabras con 6 agentes y varias rondas (RNF-02).
+        ultima = {t.agente_id: t.id for t in publicados}
+        mesa = []
+        for t in publicados:
+            assert t.artefacto is not None
+            entrada: dict[str, Any] = {
                 "turno_id": t.id,
                 "agente": t.agente_id,
                 "nombre": nombres.get(t.agente_id, t.agente_id),
                 "ronda": t.ronda,
-                "artefacto": t.artefacto.model_dump(mode="json"),
             }
-            for t in turnos
-            if t.artefacto is not None
-        ]
+            if ultima[t.agente_id] == t.id:
+                entrada["artefacto"] = t.artefacto.model_dump(mode="json")
+            else:
+                entrada["artefacto"] = t.artefacto.model_dump(
+                    mode="json", include={"postura", "resumen", "responde_a", "confianza"}
+                )
+            mesa.append(entrada)
         limite = self.verificador.limites.max_palabras_turno
         datos: dict[str, Any] = {
             "sala_id": sala.id,
             "estado": sala.estado.value,
             "objetivo": sala.objetivo,
             "protocolo": sala.protocolo.value,
+            "rondas_jugadas": max((t.ronda for t in turnos), default=0),
+            "motivo_cierre": self._protocolo(sala).cierre(sala, turnos),
             "agente": {"id": self.verificador.id, "nombre": self.verificador.nombre, "postura": self.verificador.postura},
             "instrucciones": self.verificador.instrucciones,
             "mesa": mesa,
@@ -420,6 +447,45 @@ class GestorSalas:
         if vista == "veredicto":
             return vista_veredicto(sala, self.almacen.veredicto(sala.id))
         raise ErrorSala(textos.VISTA_DESCONOCIDA.format(vista=vista))
+
+
+def _hilo(publicados: list[Turno], agente_id: str) -> list[dict[str, Any]]:
+    """Hilo propio: el último turno completo y los anteriores resumidos (RNF-02)."""
+    propios = [t for t in publicados if t.agente_id == agente_id]
+    hilo: list[dict[str, Any]] = []
+    for i, t in enumerate(propios):
+        if i == len(propios) - 1:
+            hilo.append({"turno_id": t.id, "ronda": t.ronda, "contenido": t.contenido})
+        else:
+            assert t.artefacto is not None
+            hilo.append({"turno_id": t.id, "ronda": t.ronda, "resumen": t.artefacto.resumen})
+    return hilo
+
+
+def _ultimos_de_cada_uno(resumen: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """De la mesa, solo la intervención más reciente de cada agente (RNF-02)."""
+    ultimo = {e["agente"]: i for i, e in enumerate(resumen)}
+    return [e for i, e in enumerate(resumen) if ultimo[e["agente"]] == i]
+
+
+def _nota_moderador(sala: Sala, proto: ProtocoloSala, turnos: list[Turno], ronda: int) -> str | None:
+    """Aviso del moderador cuando se completa una ronda de debate."""
+    if sala.protocolo is not Protocolo.DEBATE:
+        return None
+    de_la_ronda = [t for t in turnos if t.ronda == ronda]
+    if len(de_la_ronda) < len(sala.agentes) or any(t.artefacto is None for t in de_la_ronda):
+        return None
+    cuenta = {p: 0 for p in ("propuesta", "apoyo", "objecion", "correccion")}
+    for t in de_la_ronda:
+        assert t.artefacto is not None
+        cuenta[t.artefacto.postura.value] += 1
+    resumen = ", ".join(f"{n} {p}" for p, n in cuenta.items() if n)
+    motivo = proto.cierre(sala, turnos)
+    if motivo == "consenso":
+        return textos.MODERADOR_CONSENSO.format(ronda=ronda, resumen=resumen)
+    if motivo is not None:
+        return textos.MODERADOR_LIMITE.format(ronda=ronda, resumen=resumen)
+    return textos.MODERADOR_SIGUE.format(ronda=ronda, resumen=resumen, siguiente=ronda + 1)
 
 
 def _veredicto_dict(v: Veredicto | None) -> dict[str, Any] | None:

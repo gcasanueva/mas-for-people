@@ -105,13 +105,18 @@ Claude pedirá permiso para usar `listar_agentes` o `ver_agente` la primera
 vez; acepta. En el botón de herramientas (ícono de enchufe o deslizadores
 bajo el cuadro de texto) debe aparecer **mas-for-people** con 7 herramientas.
 
-## 7. Primera sala (panel)
+## 7. Primera sala (debate o panel)
 
 Pide algo como:
 
-> Abre un panel con el ingeniero industrial, el economista ortodoxo y el
-> periodista para reducir 30% el consumo energético de una planta de
-> envasado.
+> Abre un debate de 2 rondas con el ingeniero industrial, el economista
+> ortodoxo y el periodista para reducir 30% el consumo energético de una
+> planta de envasado.
+
+En el debate, cada agente propone primero por su cuenta y en las rondas
+siguientes critica o corrige lo que dijeron los demás. Termina antes si en
+una ronda nadie objeta (consenso). Si prefieres respuestas independientes en
+una sola ronda, pide "un panel" en vez de "un debate".
 
 Claude abre la sala y sigue solo: pide el turno de cada agente, escribe su
 intervención, la publica y al final escribe el veredicto del verificador.
