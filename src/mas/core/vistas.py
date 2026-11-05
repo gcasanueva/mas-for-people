@@ -8,7 +8,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from . import textos
-from .modelos import Sala, Turno, Veredicto
+from .formatos import FORMATOS
+from .modelos import Agente, Sala, Skill, Turno, Veredicto
 
 
 def _fecha(sala: Sala) -> str:
@@ -53,7 +54,11 @@ def _lista(titulo: str, elementos: Iterable[str]) -> list[str]:
 
 
 def vista_mesa(sala: Sala, turnos: list[Turno], nombres: dict[str, str]) -> str:
-    partes = [encabezado(sala), "## Mesa", ""]
+    return encabezado(sala) + _seccion_mesa(turnos, nombres)
+
+
+def _seccion_mesa(turnos: list[Turno], nombres: dict[str, str]) -> str:
+    partes = ["", "## Mesa", ""]
     if not turnos:
         partes.append(textos.VISTA_MESA_VACIA)
     for t in turnos:
@@ -77,7 +82,11 @@ def vista_mesa(sala: Sala, turnos: list[Turno], nombres: dict[str, str]) -> str:
 
 
 def vista_hilos(sala: Sala, turnos: list[Turno], nombres: dict[str, str], agentes: list[str]) -> str:
-    partes = [encabezado(sala)]
+    return encabezado(sala) + _seccion_hilos(turnos, nombres, agentes)
+
+
+def _seccion_hilos(turnos: list[Turno], nombres: dict[str, str], agentes: list[str]) -> str:
+    partes = [""]
     for agente_id in agentes:
         nombre = nombres.get(agente_id, agente_id)
         partes += [f"## Hilo de {nombre}", ""]
@@ -90,7 +99,11 @@ def vista_hilos(sala: Sala, turnos: list[Turno], nombres: dict[str, str], agente
 
 
 def vista_veredicto(sala: Sala, v: Veredicto | None) -> str:
-    partes = [encabezado(sala), "## Veredicto", ""]
+    return encabezado(sala) + _seccion_veredicto(sala, v)
+
+
+def _seccion_veredicto(sala: Sala, v: Veredicto | None) -> str:
+    partes = ["", "## Veredicto", ""]
     if v is None:
         partes.append(textos.VISTA_SIN_VEREDICTO.format(estado=sala.estado.value))
         return "\n".join(partes) + "\n"
@@ -99,3 +112,48 @@ def vista_veredicto(sala: Sala, v: Veredicto | None) -> str:
     if resumen:
         partes += ["", "---", ""] + resumen
     return "\n".join(partes).rstrip() + "\n"
+
+
+def vista_completa(
+    sala: Sala, turnos: list[Turno], nombres: dict[str, str], veredicto: Veredicto | None
+) -> str:
+    """Toda la sala en un documento: mesa, hilos y veredicto (RF-15, RF-19)."""
+    return (
+        encabezado(sala)
+        + _seccion_mesa(turnos, nombres)
+        + _seccion_hilos(turnos, nombres, sala.agentes)
+        + _seccion_veredicto(sala, veredicto)
+    )
+
+
+def vista_agente(agente: Agente, skills: list[Skill]) -> str:
+    """Ficha de un agente para el visor (RF-16): postura, skills y formato."""
+    fmt = FORMATOS.get(agente.formato_salida)
+    partes = [
+        f"# {agente.nombre or agente.id}",
+        "",
+        agente.descripcion,
+        "",
+        f"- **Id:** `{agente.id}`",
+        f"- **Familia:** {agente.familia}",
+        f"- **Postura:** {agente.postura}",
+        f"- **Versión:** {agente.version}",
+        f"- **Límites:** {agente.limites.max_turnos} turnos, "
+        f"{agente.limites.max_palabras_turno} palabras por turno",
+    ]
+    if agente.sensible and agente.aviso:
+        partes += ["", f"> **Aviso:** {agente.aviso}"]
+    partes += ["", "## Skills", ""]
+    if skills:
+        partes += [f"- **{s.id}**: {s.descripcion}" for s in skills]
+    else:
+        partes.append(textos.VISOR_SIN_SKILLS)
+    partes += ["", "## Formato de salida", ""]
+    if fmt:
+        partes.append(f"**{fmt.nombre}** (`{fmt.id}`): " + ", ".join(fmt.secciones) + ".")
+    else:
+        partes.append(f"`{agente.formato_salida}`")
+    partes += ["", "## Instrucciones", "", agente.instrucciones.strip()]
+    if agente.ruta:
+        partes += ["", f"_{agente.ruta}_"]
+    return "\n".join(partes) + "\n"

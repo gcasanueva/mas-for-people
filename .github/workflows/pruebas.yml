@@ -18,6 +18,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: Bibliotecas de Qt para probar la ventana sin pantalla
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libfontconfig1
       - run: uv sync
       - run: uv run pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
       - run: uv run mas-validar

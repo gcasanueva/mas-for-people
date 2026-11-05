@@ -1,7 +1,7 @@
 [project]
 name = "mas-for-people"
-version = "0.3.0"
-description = "Salas de agentes especializados que debaten por turnos (MVP vía MCP en Claude Desktop)."
+version = "0.4.0"
+description = "Salas de agentes especializados que debaten por turnos (MVP vía MCP en Claude Desktop, con visor de escritorio)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -9,12 +9,14 @@ dependencies = [
     "pydantic>=2.7",
     "python-frontmatter>=1.1",
     "pyyaml>=6.0",
+    "PySide6-Essentials>=6.7",
 ]
 
 [project.scripts]
 mas-validar = "mas.validar:main"
 mas-servidor = "mas.servidor.app:main"
 mas-config = "mas.servidor.config:main"
+mas-visor = "mas.visor.app:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "anyio>=4"]
