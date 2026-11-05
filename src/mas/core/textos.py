@@ -103,3 +103,52 @@ ERRORES_PYDANTIC: dict[str, str] = {
     "datetime_parsing": "Debe ser una fecha y hora.",
 }
 ERROR_GENERICO = "Valor no válido."
+
+# --- Servidor MCP ------------------------------------------------------------
+
+SERVIDOR_INSTRUCCIONES = (
+    "MAS for People guarda un catálogo de agentes especializados (ingenieros, "
+    "economistas, periodistas...). El servidor no razona: entrega las fichas e "
+    "instrucciones de cada agente y tú (Claude) haces el trabajo. Usa "
+    "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo. "
+    "Responde al usuario en español."
+)
+HERRAMIENTA_LISTAR = (
+    "Lista los agentes del catálogo con su id, nombre, familia, postura y "
+    "descripción corta. Filtra opcionalmente por familia (por ejemplo "
+    "'ingenieria', 'economia', 'comunicacion') o por texto libre (busca en "
+    "nombre, postura, descripción y skills; no distingue tildes ni mayúsculas). "
+    "Si algún archivo de agente tiene errores, también los devuelve para "
+    "que el usuario sepa qué corregir."
+)
+HERRAMIENTA_VER = (
+    "Devuelve un agente completo por su id: ficha, formato de salida con sus "
+    "secciones, límites, instrucciones, el archivo agente.md tal cual y las "
+    "skills que usa con su descripción. Usa primero listar_agentes para "
+    "conocer los ids."
+)
+PARAM_FAMILIA = "Familia a mostrar, por ejemplo 'ingenieria'. Vacío para todas."
+PARAM_TEXTO = "Palabras a buscar, por ejemplo 'escéptico' o 'costos'. Vacío para no filtrar."
+PARAM_ID = "Id del agente, por ejemplo 'ingeniero-industrial'."
+SERVIDOR_INICIADO = "MAS for People: servidor MCP listo. Catálogo en {raiz} ({agentes} agentes, {skills} skills)."
+SERVIDOR_ERRORES_CATALOGO = "MAS for People: {n} archivo(s) con errores en el catálogo:"
+RAIZ_NO_ENCONTRADA = (
+    "No se encontró la carpeta del proyecto (la que tiene agentes/ y skills/). "
+    "Indica la ruta con la variable de entorno MAS_CARPETA o ejecuta el "
+    "servidor con 'uv --directory <carpeta> run mas-servidor'."
+)
+
+# --- Comando mas-config ------------------------------------------------------
+
+CONFIG_TITULO = "Configuración para Claude Desktop"
+CONFIG_PASOS = (
+    "1. En Claude Desktop abre Configuración > Desarrollador > Editar configuración.\n"
+    "   Se abre el archivo {archivo}\n"
+    "2. Si el archivo está vacío o solo tiene {{}}, reemplázalo por el bloque de abajo.\n"
+    "   Si ya tiene \"mcpServers\", agrega solo la entrada \"mas-for-people\" dentro.\n"
+    "3. Guarda el archivo, cierra Claude Desktop por completo y vuelve a abrirlo."
+)
+CONFIG_SIN_UV = (
+    "Aviso: no encontré el programa 'uv' en esta terminal. Instálalo primero "
+    "(ver docs/claude-desktop.md) y vuelve a ejecutar este comando."
+)
