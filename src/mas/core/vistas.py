@@ -132,7 +132,7 @@ def vista_completa(
     )
 
 
-def vista_agente(agente: Agente, skills: list[Skill]) -> str:
+def vista_agente(agente: Agente, skills: list[Skill], propio: bool = False) -> str:
     """Ficha de un agente para el visor (RF-16): postura, skills y formato."""
     fmt = FORMATOS.get(agente.formato_salida)
     partes = [
@@ -144,6 +144,7 @@ def vista_agente(agente: Agente, skills: list[Skill]) -> str:
         f"- **Familia:** {agente.familia}",
         f"- **Postura:** {agente.postura}",
         f"- **Versión:** {agente.version}",
+        *([textos.VISTA_ORIGEN_PROPIO] if propio else []),
         f"- **Límites:** {agente.limites.max_turnos} turnos, "
         f"{agente.limites.max_palabras_turno} palabras por turno",
     ]

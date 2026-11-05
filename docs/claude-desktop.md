@@ -103,7 +103,7 @@ En un chat nuevo de Claude Desktop escribe:
 
 Claude pedirá permiso para usar `listar_agentes` o `ver_agente` la primera
 vez; acepta. En el botón de herramientas (ícono de enchufe o deslizadores
-bajo el cuadro de texto) debe aparecer **mas-for-people** con 7 herramientas.
+bajo el cuadro de texto) debe aparecer **mas-for-people** con 8 herramientas.
 
 ## 7. Primera sala (debate o panel)
 
@@ -130,6 +130,22 @@ de la sala <id>" o "Muéstrame el hilo del periodista en esa sala".
 Las salas quedan en `datos\mas.db` dentro de la carpeta del proyecto.
 Si actualizaste desde el paso 2, ejecuta `uv sync` y reinicia Claude
 Desktop para ver las herramientas nuevas.
+
+## 8. Atajos y agentes propios
+
+En el botón **+** del cuadro de texto, entra a *mas-for-people*: verás los
+atajos **debate**, **panel** y **crear_agente**. Rellena el objetivo (y, si
+quieres, los agentes) y Claude hace el resto. Si dejas los agentes vacíos,
+te sugiere un equipo.
+
+Para crear un agente propio también basta con pedirlo:
+
+> Crea un agente nutricionista, prudente, que revise el impacto en la salud
+> de los trabajadores.
+
+Claude te muestra el borrador y lo guarda solo cuando le dices que sí. Queda
+en la carpeta `mis-agentes\` del proyecto, solo en tu equipo, y ya se puede
+usar en un debate.
 
 ## Si algo falla
 

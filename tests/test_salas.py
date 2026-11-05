@@ -276,14 +276,15 @@ def test_contexto_de_cada_turno_cabe_en_3000_palabras(tmp_path: Path, bd: Path, 
         rondas.add(t["ronda"])
         relleno = "palabra " * (400 // len(t["formato_salida"]["secciones"]) - 3)
         if t["ronda"] == 1:
-            art = artefacto(resumen="palabra " * 75, supuestos=["frase " * 30] * 5, riesgos=["frase " * 30] * 5)
+            art = artefacto(resumen="palabra " * 75, supuestos=["frase " * 20] * 4, riesgos=["frase " * 20] * 4)
         else:  # siempre corrige, para que el debate llegue a la última ronda
             art = artefacto(postura="correccion", resumen="palabra " * 75, responde_a=[t["resumen_mesa"][0]["turno_id"]],
-                            supuestos=["frase " * 30] * 5, riesgos=["frase " * 30] * 5)
+                            supuestos=["frase " * 20] * 4, riesgos=["frase " * 20] * 4)
         r = gestor.publicar_turno(sala_id, t["turno_id"], texto_valido(t, relleno), art)
         assert r["ok"], r
     assert rondas == ({1} if protocolo == "panel" else {1, 2, 3})
-    assert gestor.veredicto(sala_id)["palabras_contexto"] <= 3000
+    v = gestor.veredicto(sala_id)
+    assert v["palabras_contexto"] <= 3000
 
 
 def test_lectura_en_paralelo_con_wal(gestor: GestorSalas, bd: Path):

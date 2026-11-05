@@ -30,6 +30,7 @@ from mas import __version__
 from mas.core import textos
 from mas.core.almacen import Almacen
 from mas.core.catalogo import Catalogo, NoEncontrado
+from mas.core.creacion import guardar_agente, opciones_creacion
 from mas.core.formatos import formato
 from mas.core.modelos import Artefacto
 from mas.core.salas import ErrorSala, GestorSalas
@@ -75,7 +76,7 @@ def _errores(catalogo: Catalogo) -> list[str]:
 def listar_agentes(catalogo: Catalogo, familia: str | None = None, texto: str | None = None) -> dict[str, Any]:
     """Lógica de ``listar_agentes`` (separada para poder probarla sin MCP)."""
     catalogo.recargar()  # los cambios hechos a mano se ven sin reiniciar (RNF-04)
-    agentes = [a.ficha() for a in catalogo.listar(familia=familia or None, texto=texto or None)]
+    agentes = [catalogo.ficha(a) for a in catalogo.listar(familia=familia or None, texto=texto or None)]
     return {
         "agentes": agentes,
         "total": len(agentes),
@@ -90,7 +91,7 @@ def ver_agente(catalogo: Catalogo, id: str) -> dict[str, Any]:
     agente = catalogo.agente(id.strip())
     fmt = formato(agente.formato_salida)
     return {
-        **agente.ficha(),
+        **catalogo.ficha(agente),
         "version": agente.version,
         "formato_salida": {
             "id": agente.formato_salida,
@@ -136,7 +137,31 @@ def crear_servidor(raiz: Path | str, bd: Path | str | None = None) -> MCPServer:
         except NoEncontrado as exc:
             raise ToolError(f"{exc} Usa listar_agentes para ver los ids disponibles.") from None
 
+    @mcp.tool(
+        name="guardar_agente", title="Guardar agente", description=textos.HERRAMIENTA_GUARDAR_AGENTE,
+        annotations=ESCRITURA,
+    )
+    def _guardar_agente(
+        nombre: Annotated[str, Field(description=textos.PARAM_NOMBRE_AGENTE)],
+        especialidad: Annotated[str, Field(description=textos.PARAM_ESPECIALIDAD)],
+        familia: Annotated[str, Field(description=textos.PARAM_FAMILIA_AGENTE)],
+        postura: Annotated[str, Field(description=textos.PARAM_POSTURA)],
+        formato_salida: Annotated[str, Field(description=textos.PARAM_FORMATO)],
+        instrucciones: Annotated[str, Field(description=textos.PARAM_INSTRUCCIONES)],
+        skills: Annotated[list[str] | None, Field(description=textos.PARAM_SKILLS)] = None,
+        id: Annotated[str | None, Field(description=textos.PARAM_ID_AGENTE)] = None,
+        sensible: Annotated[bool, Field(description=textos.PARAM_SENSIBLE)] = False,
+        aviso: Annotated[str | None, Field(description=textos.PARAM_AVISO)] = None,
+        reemplazar: Annotated[bool, Field(description=textos.PARAM_REEMPLAZAR)] = False,
+        solo_validar: Annotated[bool, Field(description=textos.PARAM_SOLO_VALIDAR)] = False,
+    ) -> dict[str, Any]:
+        return guardar_agente(
+            catalogo, nombre, especialidad, familia, postura, skills, formato_salida, instrucciones,
+            id=id, sensible=sensible, aviso=aviso, reemplazar=reemplazar, solo_validar=solo_validar,
+        )
+
     _registrar_salas(mcp, salas)
+    _registrar_prompts(mcp, catalogo)
 
     mcp.catalogo = catalogo  # type: ignore[attr-defined]  # útil en pruebas
     mcp.salas = salas  # type: ignore[attr-defined]
@@ -202,6 +227,73 @@ def _registrar_salas(mcp: MCPServer, salas: GestorSalas) -> None:
         agente: Annotated[str | None, Field(description=textos.PARAM_AGENTE_HILO)] = None,
     ) -> str:
         return ejecutar(salas.ver_sala, sala_id, vista, agente)
+
+
+def _reglas_moderador(catalogo: Catalogo) -> str:
+    skill = catalogo.skills.get("protocolos-sala")
+    return skill.instrucciones.strip() if skill else ""
+
+
+def _equipo(agentes: str | None) -> str:
+    lista = [a.strip() for a in (agentes or "").split(",") if a.strip()]
+    return textos.PROMPT_EQUIPO_ELEGIDO.format(agentes=", ".join(lista)) if lista else textos.PROMPT_EQUIPO_SUGERIDO
+
+
+def _opciones_texto(catalogo: Catalogo) -> str:
+    op = opciones_creacion(catalogo)
+    lineas = ["Familias que ya existen: " + ", ".join(op["familias"]), "", "Formatos de salida:"]
+    lineas += [f"- {f['id']}: {', '.join(f['secciones'])}" for f in op["formatos"]]
+    lineas += ["", "Skills:"]
+    lineas += [f"- {s['id']}: {s['descripcion']}" for s in op["skills"]]
+    return "\n".join(lineas)
+
+
+def prompt_debate(catalogo: Catalogo, objetivo: str, agentes: str | None = None, rondas: str | None = None) -> str:
+    try:
+        n = min(max(int((rondas or "2").strip()), 1), 4)
+    except ValueError:
+        n = 2
+    return textos.PROMPT_DEBATE.format(
+        objetivo=objetivo.strip(), equipo=_equipo(agentes), rondas=n, reglas=_reglas_moderador(catalogo)
+    )
+
+
+def prompt_panel(catalogo: Catalogo, objetivo: str, agentes: str | None = None) -> str:
+    return textos.PROMPT_PANEL.format(objetivo=objetivo.strip(), equipo=_equipo(agentes), reglas=_reglas_moderador(catalogo))
+
+
+def prompt_crear_agente(catalogo: Catalogo, descripcion: str | None = None) -> str:
+    desc = (
+        textos.PROMPT_CON_DESCRIPCION.format(descripcion=descripcion.strip())
+        if descripcion and descripcion.strip()
+        else textos.PROMPT_SIN_DESCRIPCION
+    )
+    return textos.PROMPT_CREAR.format(descripcion=desc, opciones=_opciones_texto(catalogo))
+
+
+def _registrar_prompts(mcp: MCPServer, catalogo: Catalogo) -> None:
+    """Atajos para el usuario en Claude Desktop (RF-13): debate, panel y crear_agente."""
+
+    @mcp.prompt(name="debate", title="Debate", description=textos.PROMPT_DEBATE_DESC)
+    def _debate(
+        objetivo: Annotated[str, Field(description=textos.PROMPT_ARG_OBJETIVO)],
+        agentes: Annotated[str | None, Field(description=textos.PROMPT_ARG_AGENTES)] = None,
+        rondas: Annotated[str | None, Field(description=textos.PROMPT_ARG_RONDAS)] = None,
+    ) -> str:
+        return prompt_debate(catalogo, objetivo, agentes, rondas)
+
+    @mcp.prompt(name="panel", title="Panel", description=textos.PROMPT_PANEL_DESC)
+    def _panel(
+        objetivo: Annotated[str, Field(description=textos.PROMPT_ARG_OBJETIVO)],
+        agentes: Annotated[str | None, Field(description=textos.PROMPT_ARG_AGENTES)] = None,
+    ) -> str:
+        return prompt_panel(catalogo, objetivo, agentes)
+
+    @mcp.prompt(name="crear_agente", title="Crear agente", description=textos.PROMPT_CREAR_DESC)
+    def _crear_agente(
+        descripcion: Annotated[str | None, Field(description=textos.PROMPT_ARG_DESCRIPCION)] = None,
+    ) -> str:
+        return prompt_crear_agente(catalogo, descripcion)
 
 
 def main() -> None:

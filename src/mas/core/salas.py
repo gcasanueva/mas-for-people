@@ -418,6 +418,10 @@ class GestorSalas:
             "motivo_cierre": self._protocolo(sala).cierre(sala, turnos),
             "agente": {"id": self.verificador.id, "nombre": self.verificador.nombre, "postura": self.verificador.postura},
             "instrucciones": self.verificador.instrucciones,
+            "skills": [
+                {"id": s.id, "descripcion": s.descripcion, "instrucciones": s.instrucciones}
+                for s in self.catalogo.skills_de(self.verificador)
+            ],
             "mesa": mesa,
             "formato_salida": _formato_dict(fmt),
             "max_palabras": limite,

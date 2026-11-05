@@ -111,7 +111,9 @@ SERVIDOR_INSTRUCCIONES = (
     "economistas, periodistas...) y lleva salas donde esos agentes trabajan por "
     "turnos sobre un objetivo. El servidor no razona: entrega a cada agente sus "
     "instrucciones y contexto, y tú (Claude) haces de cada uno. Usa "
-    "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo.\n\n"
+    "listar_agentes para ver qué agentes hay y ver_agente para leer uno completo. "
+    "Para crear o editar un agente usa guardar_agente: primero con solo_validar=true "
+    "para mostrar el borrador y, cuando el usuario lo confirme, para guardarlo.\n\n"
     "Para una sala: abrir_sala (protocolo 'debate' por rondas o 'panel' de una "
     "ronda), luego repite siguiente_turno -> escribe la "
     "intervención de ese agente -> publicar_turno, hasta que siguiente_turno "
@@ -244,6 +246,8 @@ VISTA_DESCONOCIDA = "Vista desconocida: '{vista}'. Usa 'mesa', 'hilo' o 'veredic
 VISTA_SIN_SALAS = "Todavía no hay salas guardadas."
 VISTA_TITULO_SALAS = "# Salas guardadas"
 VISTA_RONDA = "### Ronda {ronda}"
+VISTA_ORIGEN_PROPIO = "- **Origen:** creado por ti (mis-agentes/, solo en este equipo)"
+VISTA_MARCA_PROPIO = " · propio"
 VISTA_MESA_VACIA = "_La mesa está vacía: nadie ha publicado todavía._"
 VISTA_HILO_VACIO = "_{nombre} no ha publicado turnos en esta sala._"
 VISTA_SIN_VEREDICTO = "_La sala todavía no tiene veredicto (estado: {estado})._"
@@ -312,8 +316,8 @@ ARTEFACTO_CAMPOS: dict[str, str] = {
         "'objecion' o 'correccion' (estas dos exigen responde_a)."
     ),
     "resumen": "La idea central en 1 a 3 frases (máximo 600 caracteres).",
-    "supuestos": "Hasta 5 supuestos de los que depende la propuesta (frases cortas).",
-    "riesgos": "Hasta 5 riesgos principales (frases cortas).",
+    "supuestos": "Hasta 4 supuestos de los que depende la propuesta (frases cortas, hasta 120 caracteres).",
+    "riesgos": "Hasta 4 riesgos principales (frases cortas, hasta 120 caracteres).",
     "responde_a": "Ids de turnos (los turno_id del resumen de la mesa) a los que responde; vacío en la ronda 1 y en panel.",
     "confianza": "Confianza del agente en su propuesta, de 0 a 1.",
     "cambiaria_de_opinion_si": "Qué dato o hecho le haría cambiar de opinión.",
@@ -375,3 +379,103 @@ VISOR_SIN_PYSIDE = (
     "Falta la biblioteca de la ventana (Qt para Python). En la carpeta del proyecto ejecuta "
     "«uv sync» y vuelve a intentarlo."
 )
+
+# --- Crear y editar agentes (paso 6, CU-02) ----------------------------------
+
+CREAR_ID_RESERVADO = "'{id}' es un agente de sistema; elige otro nombre."
+CREAR_YA_EXISTE = (
+    "Ya existe un agente con el id '{id}' ({ruta}). Si quieres modificarlo, vuelve a llamar con "
+    "reemplazar=true; si es otro agente, cámbiale el nombre o pasa un id distinto."
+)
+CREAR_CORREGIR = (
+    "No se guardó nada. Corrige lo indicado (formatos_validos y skills_disponibles dicen qué "
+    "valores existen) y vuelve a llamar a guardar_agente."
+)
+CREAR_BORRADOR_OK = (
+    "El borrador es válido y no se guardó todavía. Muéstrale al usuario el agente_md y, cuando "
+    "lo confirme, llama otra vez a guardar_agente con los mismos datos y solo_validar=false."
+)
+CREAR_GUARDADO = (
+    "Agente '{nombre}' guardado en {ruta}. Ya aparece en listar_agentes y se puede usar en una "
+    "sala. Es local: está solo en este equipo y no se comparte."
+)
+HERRAMIENTA_GUARDAR_AGENTE = (
+    "Crea un agente nuevo o edita uno existente y lo guarda como agente.md. Campos: nombre "
+    "visible, especialidad (cuándo usarlo, 1 o 2 frases), familia (p. ej. 'ingenieria', "
+    "'salud', 'derecho'), postura por defecto (p. ej. 'conservador', 'escéptico'), skills "
+    "(ids existentes), formato_salida (id de formato) e instrucciones (cómo trabaja, en "
+    "Markdown). Primero llama con solo_validar=true para obtener el borrador y mostrárselo al "
+    "usuario; guarda (solo_validar=false) solo cuando el usuario confirme. Para editar un "
+    "agente existente pasa su id y reemplazar=true. Si algo no cumple devuelve ok=false con "
+    "los errores, los formatos válidos y las skills disponibles. Los agentes nuevos quedan en "
+    "mis-agentes/, solo en este equipo."
+)
+PARAM_NOMBRE_AGENTE = "Nombre visible, por ejemplo 'Ingeniera de datos'. El id se crea a partir de él."
+PARAM_ESPECIALIDAD = "Qué sabe hacer y cuándo usarlo, en 1 o 2 frases (máximo 400 caracteres)."
+PARAM_FAMILIA_AGENTE = "Familia del agente: una existente (ver listar_agentes) o una nueva, en minúsculas."
+PARAM_POSTURA = "Postura por defecto, por ejemplo 'conservador', 'innovador', 'escéptico' o 'pragmático'."
+PARAM_SKILLS = "Ids de skills existentes (pueden ser ninguna). Si falta alguna, el error lista las disponibles."
+PARAM_FORMATO = (
+    "Formato de salida: propuesta-tecnica, analisis-economico, plan-de-mercado, nota-critica, "
+    "informe-con-fuentes u objeciones-priorizadas."
+)
+PARAM_INSTRUCCIONES = (
+    "Instrucciones del agente en Markdown: quién es, cómo trabaja (viñetas) y qué evita. "
+    "Sin encabezado YAML."
+)
+PARAM_ID_AGENTE = "Opcional: id explícito (minúsculas y guiones). Para editar, el id del agente existente."
+PARAM_SENSIBLE = "true si es de salud, derecho o finanzas personales; entonces 'aviso' es obligatorio."
+PARAM_AVISO = "Aviso que mostrará un agente sensible, por ejemplo 'No reemplaza a un médico'."
+PARAM_REEMPLAZAR = "true para sobrescribir un agente que ya existe (editar)."
+PARAM_SOLO_VALIDAR = "true para validar y ver el borrador sin guardar nada."
+
+# --- Prompts MCP (RF-13) -----------------------------------------------------
+
+PROMPT_DEBATE_DESC = "Abre un debate por rondas entre agentes sobre un objetivo y lo lleva hasta el veredicto."
+PROMPT_PANEL_DESC = "Abre un panel: cada agente responde una vez sin ver a los demás y luego hay veredicto."
+PROMPT_CREAR_DESC = "Te guía para crear un agente propio: lo completa contigo, te muestra el borrador y lo guarda."
+PROMPT_ARG_OBJETIVO = "Qué quieres resolver."
+PROMPT_ARG_AGENTES = "Opcional: ids o nombres de los agentes, separados por comas. Vacío para que se sugiera un equipo."
+PROMPT_ARG_RONDAS = "Opcional: rondas máximas del debate (1 a 4). Por defecto 2."
+PROMPT_ARG_DESCRIPCION = "Opcional: describe con tus palabras el agente que quieres."
+
+PROMPT_EQUIPO_ELEGIDO = "Usa estos agentes, en este orden (si alguno no es un id, búscalo con listar_agentes): {agentes}."
+PROMPT_EQUIPO_SUGERIDO = (
+    "No elegí agentes: llama a listar_agentes y sugiere un equipo de 3 o 4 agentes de familias "
+    "distintas y con posturas que se contrapongan (por ejemplo un conservador y un innovador, "
+    "y alguien escéptico). Dime el equipo en una línea con el porqué y ábrelo sin esperar, "
+    "salvo que te pida cambiarlo."
+)
+PROMPT_DEBATE = (
+    "Quiero un debate por rondas en MAS for People.\n\n"
+    "Objetivo: {objetivo}\n\n{equipo}\n\n"
+    "Abre la sala con abrir_sala (protocolo 'debate', max_rondas {rondas}) y llévala hasta el "
+    "final sin pedirme confirmación entre turnos: siguiente_turno → escribe la intervención de "
+    "ese agente usando solo lo que te entrega → publicar_turno, hasta 'listo_para_veredicto'; "
+    "luego veredicto dos veces. Muéstrame una línea de avance por turno, los avisos del "
+    "moderador al cerrar cada ronda y, al final, el veredicto completo y el sala_id.\n\n"
+    "Reglas del moderador:\n{reglas}"
+)
+PROMPT_PANEL = (
+    "Quiero un panel en MAS for People.\n\n"
+    "Objetivo: {objetivo}\n\n{equipo}\n\n"
+    "Abre la sala con abrir_sala (protocolo 'panel') y llévala hasta el final sin pedirme "
+    "confirmación entre turnos: siguiente_turno → escribe la intervención de ese agente usando "
+    "solo lo que te entrega → publicar_turno, hasta 'listo_para_veredicto'; luego veredicto dos "
+    "veces. Muéstrame una línea de avance por turno y, al final, el veredicto completo y el "
+    "sala_id.\n\nReglas del moderador:\n{reglas}"
+)
+PROMPT_CREAR = (
+    "Quiero crear un agente propio en MAS for People.\n\n{descripcion}"
+    "Ayúdame así:\n"
+    "1. Completa los campos a partir de lo que te dije: nombre, especialidad, familia, postura, "
+    "skills, formato de salida e instrucciones (quién es, cómo trabaja en viñetas y qué evita). "
+    "Pregúntame solo lo que no puedas deducir, en un solo mensaje.\n"
+    "2. Llama a guardar_agente con solo_validar=true y muéstrame el agente_md que devuelve.\n"
+    "3. Si pido cambios, ajústalo y valida de nuevo. Cuando lo confirme, guárdalo con "
+    "solo_validar=false y dime dónde quedó.\n"
+    "Si es de salud, derecho o finanzas personales, márcalo como sensible con un aviso claro.\n\n"
+    "Opciones disponibles:\n{opciones}"
+)
+PROMPT_SIN_DESCRIPCION = "Todavía no te he dicho cómo es: pregúntamelo primero.\n\n"
+PROMPT_CON_DESCRIPCION = "Así lo imagino: {descripcion}\n\n"

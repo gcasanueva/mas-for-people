@@ -5,6 +5,7 @@ description: Revisa lo publicado en la mesa contra el objetivo de la sala y escr
 version: 0.1.0
 family: sistema
 stance: neutral
+skills: [verificacion-objetivo]
 output_contract: veredicto
 limits: { max_turns: 1, max_words_per_turn: 600 }
 ---

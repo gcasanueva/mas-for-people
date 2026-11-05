@@ -71,7 +71,8 @@ class VistaCatalogo(QWidget):
             nodo.setFlags(nodo.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             self.arbol.addTopLevelItem(nodo)
             for agente in agentes:
-                hoja = QTreeWidgetItem([agente.nombre or agente.id, agente.postura])
+                marca = textos.VISTA_MARCA_PROPIO if self.catalogo.es_propio(agente) else ""
+                hoja = QTreeWidgetItem([(agente.nombre or agente.id) + marca, agente.postura])
                 hoja.setData(0, Qt.ItemDataRole.UserRole, agente.id)
                 hoja.setToolTip(0, agente.descripcion)
                 nodo.addChild(hoja)
@@ -92,4 +93,4 @@ class VistaCatalogo(QWidget):
             self.ficha.mostrar(textos.VISOR_ERRORES_TITULO + "\n\n" + "\n".join(lineas))
         elif id_ in self.catalogo.agentes:
             agente = self.catalogo.agentes[id_]
-            self.ficha.mostrar(vista_agente(agente, self.catalogo.skills_de(agente)))
+            self.ficha.mostrar(vista_agente(agente, self.catalogo.skills_de(agente), self.catalogo.es_propio(agente)))

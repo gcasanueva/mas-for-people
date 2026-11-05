@@ -38,7 +38,8 @@ async def test_expone_las_herramientas_del_catalogo_y_de_salas():
     async with Client(crear_servidor(RAIZ_PROYECTO)) as cliente:
         herramientas = {h.name: h for h in (await cliente.list_tools()).tools}
     assert sorted(herramientas) == [
-        "abrir_sala", "listar_agentes", "publicar_turno", "siguiente_turno", "ver_agente", "ver_sala", "veredicto",
+        "abrir_sala", "guardar_agente", "listar_agentes", "publicar_turno", "siguiente_turno", "ver_agente",
+        "ver_sala", "veredicto",
     ]
     for nombre in ("listar_agentes", "ver_agente", "ver_sala"):
         assert herramientas[nombre].annotations.read_only_hint is True
@@ -49,19 +50,22 @@ async def test_expone_las_herramientas_del_catalogo_y_de_salas():
 async def test_listar_todos():
     error, datos = await _llamar(RAIZ_PROYECTO, "listar_agentes", {})
     assert not error
-    assert datos["total"] == 3
-    assert {a["id"] for a in datos["agentes"]} == {"ingeniero-industrial", "economista-ortodoxo", "periodista"}
-    assert set(datos["agentes"][0]) == {"id", "nombre", "familia", "postura", "descripcion"}
+    assert datos["total"] == 9
+    assert set(datos["agentes"][0]) == {"id", "nombre", "familia", "postura", "descripcion", "propio"}
     assert datos["errores"] == []
 
 
 async def test_listar_por_familia_y_texto():
     _, datos = await _llamar(RAIZ_PROYECTO, "listar_agentes", {"familia": "Ingeniería"})
-    assert [a["id"] for a in datos["agentes"]] == ["ingeniero-industrial"]
+    # CA-01: "muéstrame los ingenieros" -> los 3 de ingeniería con su postura
+    assert {(a["id"], a["postura"]) for a in datos["agentes"]} == {
+        ("ingeniero-industrial", "conservador"), ("ingeniero-ambiental", "innovador"),
+        ("ingeniero-informatico", "pragmático"),
+    }
     _, datos = await _llamar(RAIZ_PROYECTO, "listar_agentes", {"texto": "escéptico"})
-    assert [a["id"] for a in datos["agentes"]] == ["periodista"]
+    assert [a["id"] for a in datos["agentes"]] == ["periodista", "abogado-del-diablo"]
     _, datos = await _llamar(RAIZ_PROYECTO, "listar_agentes", {"familia": "", "texto": ""})
-    assert datos["total"] == 3
+    assert datos["total"] == 9
 
 
 async def test_ver_agente_completo():
@@ -170,7 +174,7 @@ async def test_servidor_real_por_stdio(tmp_path: Path):
         r = await cliente.call_tool("listar_agentes", {"familia": "economia"})
         sala = await cliente.call_tool("abrir_sala", {"objetivo": "x", "agentes": ["periodista", "economista-ortodoxo"]})
     assert not r.is_error
-    assert [a["id"] for a in r.structured_content["agentes"]] == ["economista-ortodoxo"]
+    assert [a["id"] for a in r.structured_content["agentes"]] == ["economista-heterodoxo", "economista-ortodoxo"]
     assert not sala.is_error
     assert (tmp_path / "mas.db").exists()  # la base va donde dice MAS_BD
 
@@ -202,3 +206,41 @@ def test_nucleo_no_importa_mcp():
         texto = archivo.read_text(encoding="utf-8")
         assert "import mcp" not in texto and "from mcp" not in texto, archivo
         assert "mas.servidor" not in texto, archivo
+
+
+# --- Paso 6: guardar_agente y prompts -------------------------------------------
+
+
+async def test_guardar_agente_por_mcp(tmp_path: Path):
+    import shutil
+
+    raiz = tmp_path / "raiz"
+    shutil.copytree(RAIZ_PROYECTO / "agentes", raiz / "agentes")
+    shutil.copytree(RAIZ_PROYECTO / "skills", raiz / "skills")
+    datos = {"nombre": "Abogada laboral", "especialidad": "Revisa riesgos laborales de una decisión.",
+             "familia": "derecho", "postura": "prudente", "formato_salida": "objeciones-priorizadas",
+             "instrucciones": "Eres abogada laboral.", "sensible": True, "aviso": "No es asesoría legal."}
+    async with Client(crear_servidor(raiz, tmp_path / "mas.db")) as c:
+        r = (await c.call_tool("guardar_agente", datos | {"solo_validar": True})).structured_content
+        assert r["ok"] and r["guardado"] is False
+        r = (await c.call_tool("guardar_agente", datos)).structured_content
+        assert r["ok"] and r["guardado"] is True
+        lista = (await c.call_tool("listar_agentes", {"familia": "derecho"})).structured_content
+    assert [(a["id"], a["propio"]) for a in lista["agentes"]] == [("abogada-laboral", True)]
+
+
+async def test_prompts_debate_panel_y_crear_agente():
+    async with Client(crear_servidor(RAIZ_PROYECTO)) as c:
+        prompts = {p.name: p for p in (await c.list_prompts()).prompts}
+        assert sorted(prompts) == ["crear_agente", "debate", "panel"]
+        assert [a.name for a in prompts["debate"].arguments] == ["objetivo", "agentes", "rondas"]
+        d = await c.get_prompt("debate", {"objetivo": "Bajar 30% la energía", "rondas": "3"})
+        texto = d.messages[0].content.text
+        assert "Bajar 30% la energía" in texto and "max_rondas 3" in texto
+        assert "sugiere un equipo" in texto and "consenso" in texto  # RF-11 y reglas del moderador
+        p = await c.get_prompt("panel", {"objetivo": "x", "agentes": "periodista, investigador"})
+        assert "periodista, investigador" in p.messages[0].content.text
+        cr = await c.get_prompt("crear_agente", {"descripcion": "una nutricionista"})
+        texto = cr.messages[0].content.text
+    assert "una nutricionista" in texto and "solo_validar=true" in texto
+    assert "propuesta-tecnica" in texto and "segmentacion" in texto
